@@ -300,7 +300,12 @@ export function exitEdit(): void {
     set({ edit: null });
     return;
   }
-  if (draft.trim() === "" && childrenOf(ix, itemId).length === 0 && it.type !== "separator") {
+  // An empty, childless item is removed when you leave it — except when it is
+  // the only item in its folder: then it stays as a blank task, so the folder
+  // (e.g. one just made with "Turn into folder…") still has something to finish.
+  const onlyChildOfFolder =
+    it.parentId !== null && !!ix.items[it.parentId] && childrenOf(ix, it.parentId).length === 1;
+  if (draft.trim() === "" && childrenOf(ix, itemId).length === 0 && it.type !== "separator" && !onlyChildOfFolder) {
     const view = focused();
     const list = view === "calendar" && it.scheduleDate ? itemsOnDay(ix, it.scheduleDate) : it.parentId ? childrenOf(ix, it.parentId) : [];
     const i = list.findIndex((x) => x.id === itemId);

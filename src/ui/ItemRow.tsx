@@ -171,7 +171,9 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
       {editing ? (
         <ItemEditor item={item} view={view} className={textCls} />
       ) : (
-        <div className={textCls}>{item.text || <span className="placeholder">{placeholderFor(item)}</span>}</div>
+        <div className={textCls}>
+          {item.text || (isContainerType(item.type) || item.type === "heading" ? <span className="placeholder">{placeholderFor(item)}</span> : "\u00a0")}
+        </div>
       )}
       <div className="item-meta">
         {itemTags.map((t) => (

@@ -155,15 +155,30 @@ describe("Colonnes-style creation", () => {
     expect(get().edit).not.toBeNull();
   });
 
+  it("keeps a blank task when it is the only item of a folder just made from a task", () => {
+    selectColumnItem("b");
+    createAtTarget({ view: "columns", parentId: "b" });
+    exitEdit();
+    const d = get().doc!;
+    expect(d.items.b.type).toBe("folder");
+    const kids = childrenOf(buildIndex(d), "b");
+    expect(kids).toHaveLength(1);
+    expect(kids[0].type).toBe("task");
+    expect(kids[0].text).toBe("");
+  });
+
   it("removing an empty new item selects the previous sibling, else its create row", () => {
     selectColumnItem("b");
     createSibling();
     exitEdit();
     expect(get().view.columnsSelection).toEqual(["b"]);
-    const id = createAtTarget({ view: "columns", parentId: "a" })!;
+    // In a folder that already has items, an empty new item is removed and
+    // selection falls back to the item above it.
+    const id = createAtTarget({ view: "columns", parentId: "F" })!;
     enterEdit(id);
     exitEdit();
-    expect(get().createTarget).toEqual({ view: "columns", parentId: "a" });
+    expect(get().doc!.items[id]).toBeUndefined();
+    expect(get().view.columnsSelection).toEqual(["c"]);
   });
 });
 
