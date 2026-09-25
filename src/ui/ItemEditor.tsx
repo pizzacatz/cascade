@@ -8,7 +8,7 @@ import { childrenOf } from "../model/tree";
 import { get, set, useApp } from "../state/store";
 import { indexOf } from "../state/derived";
 import { enterEdit, selectColumnItem, updateDraft, selectCalendarItem } from "../state/nav";
-import { convertEditedItem, createFromEdit, createSibling, exitEdit, flushEdit } from "../state/items";
+import { MAX_TEXT_LENGTH, convertEditedItem, createFromEdit, createSibling, exitEdit, flushEdit } from "../state/items";
 
 function placeCaret(el: HTMLElement, caret: "start" | "end" | number) {
   const sel = window.getSelection();
@@ -87,9 +87,24 @@ export function ItemEditor({ item, view, className }: { item: Item; view: "colum
     return () => window.removeEventListener("cascade:focus-editor", refocus);
   }, []);
 
+  const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (pauseTimer.current) clearTimeout(pauseTimer.current);
+  }, []);
+
   const onInput = () => {
     const el = ref.current!;
-    const text = (el.textContent ?? "").replace(/\n/g, " ");
+    let text = (el.textContent ?? "").replace(/\n/g, " ");
+    if (text.length > MAX_TEXT_LENGTH) {
+      text = text.slice(0, MAX_TEXT_LENGTH);
+      el.textContent = text;
+      placeCaret(el, "end");
+    }
+    // Save after a short pause, so undo steps back in small chunks.
+    if (pauseTimer.current) clearTimeout(pauseTimer.current);
+    pauseTimer.current = setTimeout(() => {
+      if (get().edit?.itemId === item.id) flushEdit();
+    }, 500);
     const { prefs } = get();
     const sep = prefs.separatorShortcutTrigger;
     const head = prefs.headingShortcutTrigger;
@@ -151,8 +166,12 @@ export function ItemEditor({ item, view, className }: { item: Item; view: "colum
       if (!next) return;
       e.preventDefault();
       e.stopPropagation();
-      const offset = caretOffset(el);
-      moveEditTo(next.id, view, up ? "end" : Math.min(offset, next.text.length));
+      // Keep the caret's horizontal position when moving to the neighbour.
+      const sel = window.getSelection();
+      const rect = sel && sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
+      const x = rect && rect.width + rect.left > 0 ? rect.left : el.getBoundingClientRect().left;
+      const offset = offsetAtX(next.id, view, x, up) ?? (up ? "end" : Math.min(caretOffset(el), next.text.length));
+      moveEditTo(next.id, view, offset);
       return;
     }
     if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight") && view === "columns") {
@@ -179,7 +198,9 @@ export function ItemEditor({ item, view, className }: { item: Item; view: "colum
 
   const onPaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const text = e.clipboardData.getData("text/plain").replace(/\r?\n/g, " ");
+    const el = ref.current!;
+    const room = MAX_TEXT_LENGTH - (el.textContent ?? "").length + (window.getSelection()?.toString().length ?? 0);
+    const text = e.clipboardData.getData("text/plain").replace(/\s+/g, " ").slice(0, Math.max(0, room));
     document.execCommand("insertText", false, text);
   };
 
@@ -189,7 +210,9 @@ export function ItemEditor({ item, view, className }: { item: Item; view: "colum
       className={`item-editor ${className ?? ""}`}
       contentEditable="plaintext-only"
       suppressContentEditableWarning
-      spellCheck
+      spellCheck={false}
+      autoCorrect="off"
+      autoCapitalize="off"
       role="textbox"
       aria-label="Item text"
       onInput={onInput}
@@ -213,6 +236,20 @@ function syncDraftToDom(ref: React.RefObject<HTMLDivElement | null>) {
       placeCaret(el, "end");
     }
   });
+}
+
+/** Character offset in another row's text at a horizontal position (its last line when coming from below). */
+function offsetAtX(itemId: string, view: string, x: number, fromBelow: boolean): number | null {
+  const row = document.querySelector<HTMLElement>(`[data-item-id="${itemId}"][data-view="${view}"] .item-text`);
+  const doc = document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null };
+  if (!row || !doc.caretRangeFromPoint) return null;
+  const r = row.getBoundingClientRect();
+  const range = doc.caretRangeFromPoint(Math.min(Math.max(x, r.left + 1), r.right - 1), fromBelow ? r.bottom - 4 : r.top + 4);
+  if (!range || !row.contains(range.startContainer)) return null;
+  const pre = document.createRange();
+  pre.selectNodeContents(row);
+  pre.setEnd(range.startContainer, range.startOffset);
+  return pre.toString().length;
 }
 
 function selectColumnOrDay(id: string, view: "columns" | "calendar") {

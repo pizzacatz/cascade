@@ -57,7 +57,7 @@ import {
 import { displayName } from "../../platform";
 import { ColorPicker, IconButton } from "../Pickers";
 import { Icon } from "../icons";
-import { Modal } from "./Modal";
+import { Modal, SettingsSwitcher } from "./Modal";
 
 type Tab = "general" | "spaces" | "tags" | "formatting" | "recurrence";
 const TABS: [Tab, string][] = [
@@ -71,7 +71,7 @@ const TABS: [Tab, string][] = [
 export function DocSettings({ tab, ruleId }: { tab: Tab; ruleId?: string }) {
   const setTab = (t: Tab) => openOverlay({ kind: "docSettings", tab: t });
   return (
-    <Modal title="Document settings" icon={<Settings2 size={16} />} width={880} height="min(86vh, 760px)">
+    <Modal title="Document settings" icon={<Settings2 size={16} />} width={880} height="min(86vh, 760px)" footer={<SettingsSwitcher current="doc" />}>
       <div className="tabs">
         {TABS.map(([id, label]) => (
           <button key={id} className={`tab ${tab === id ? "tab-active" : ""}`} onClick={() => setTab(id)}>

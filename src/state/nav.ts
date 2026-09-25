@@ -313,9 +313,44 @@ export function focusView(view: ViewName): void {
   set({ createTarget: null, edit: null });
 }
 
+/**
+ * Tab: move focus to the other view, selecting the item at the same position
+ * there (or its "create a new item" spot). Leaving edit mode removes an item
+ * left empty.
+ */
 export function toggleFocusedView(): void {
-  const v = get().view;
-  focusView(v.focusedView === "columns" ? "calendar" : "columns");
+  if (get().edit) editExitHook?.();
+  const s = get();
+  const ix = indexOf(s.doc);
+  const from = s.view.focusedView;
+  const to: ViewName = from === "columns" ? "calendar" : "columns";
+  const bothShown = s.view.showColumnsView && s.view.showCalendarView;
+  // Position of the current item (or create spot) in its column / day.
+  const sel = selectionOf(s);
+  let index = 0;
+  if (sel[0] && ix.items[sel[0]]) {
+    const it = ix.items[sel[0]];
+    const list = from === "calendar" && it.scheduleDate ? itemsOnDay(ix, it.scheduleDate) : it.parentId ? childrenOf(ix, it.parentId) : [];
+    index = Math.max(0, list.findIndex((x) => x.id === it.id));
+  } else if (s.createTarget) {
+    const ct = s.createTarget;
+    index = (ct.view === "columns" ? childrenOf(ix, ct.parentId) : itemsOnDay(ix, ct.date)).length;
+  }
+  focusView(to);
+  if (!bothShown) return;
+  const after = get();
+  if (selectionOf(after).length) return; // the other view keeps its own selection
+  if (to === "calendar") {
+    const day = calendarDays(after)[0];
+    const list = itemsOnDay(ix, day);
+    if (list[index]) selectCalendarItem(list[index].id);
+    else setCreateTarget({ view: "calendar", date: day });
+  } else {
+    const parent = columnIds(after).filter((id) => !ix.items[id] || isContainerType(ix.items[id].type)).at(-1)!;
+    const list = childrenOf(ix, parent);
+    if (list[index]) selectColumnItem(list[index].id);
+    else setCreateTarget({ view: "columns", parentId: parent });
+  }
 }
 
 export function switchView(view: ViewName): void {
@@ -329,14 +364,14 @@ export function switchView(view: ViewName): void {
   set({ createTarget: null, edit: null });
 }
 
-/** columns-only → both → calendar-only → columns-only */
+/** columns-only → calendar-only → both → columns-only */
 export function cycleViewVisibility(): void {
   leaveEditKeepingItem();
   const v = get().view;
   if (v.showColumnsView && !v.showCalendarView) {
-    setView((x) => ({ ...x, showCalendarView: true }));
-  } else if (v.showColumnsView && v.showCalendarView) {
-    setView((x) => ({ ...x, showColumnsView: false, focusedView: "calendar" }));
+    setView((x) => ({ ...x, showColumnsView: false, showCalendarView: true, focusedView: "calendar" }));
+  } else if (!v.showColumnsView && v.showCalendarView) {
+    setView((x) => ({ ...x, showColumnsView: true, showCalendarView: true }));
   } else {
     setView((x) => ({ ...x, showColumnsView: true, showCalendarView: false, focusedView: "columns" }));
   }
@@ -385,7 +420,11 @@ export function navigateVertical(delta: 1 | -1, extend = false): void {
       if (last) (ct.view === "calendar" ? selectCalendarItem : selectColumnItem)(last.id);
       return;
     }
-    if (ct) return;
+    if (ct) {
+      // Down from the columns' create row continues into the calendar (split view).
+      if (ct.view === "columns" && delta > 0 && s.view.showCalendarView) toggleFocusedView();
+      return;
+    }
     const list = cal ? itemsOnDay(ix, calendarDays(s)[0]) : childrenOf(ix, columnIds(s).at(-1)!);
     const pick = delta > 0 ? list[0] : list[list.length - 1];
     if (pick) (cal ? selectCalendarItem : selectColumnItem)(pick.id);

@@ -269,24 +269,29 @@ export function createFromEdit(kind: "sibling" | "child"): void {
 // Editing
 // ---------------------------------------------------------------------------
 
-/** Commit the live edit draft to the document (coalesced per item). */
+export const MAX_TEXT_LENGTH = 1000;
+
+/** Item text is one line: whitespace runs become one space; capped in length. */
+export function cleanText(text: string): string {
+  return text.replace(/\s+/g, " ").slice(0, MAX_TEXT_LENGTH);
+}
+
+/** Commit the live edit draft to the document. */
 export function flushEdit(): void {
   const s = get();
   if (!s.edit || !s.doc) return;
-  const { itemId, draft } = s.edit;
+  const { itemId } = s.edit;
+  const draft = cleanText(s.edit.draft);
   const it = s.doc.items[itemId];
   if (!it || it.text === draft) return;
-  transact(
-    "Edit text",
-    (d) => {
-      const x = d.items[itemId];
-      if (x) {
-        x.text = draft;
-        touch(x);
-      }
-    },
-    { coalesceKey: `text:${itemId}` },
-  );
+  // Each flush (after a short pause in typing) is its own undo step.
+  transact("Edit text", (d) => {
+    const x = d.items[itemId];
+    if (x) {
+      x.text = draft;
+      touch(x);
+    }
+  });
 }
 
 /** Leave edit mode. Empty, childless items are removed rather than kept. */

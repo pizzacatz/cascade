@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { closeOverlay } from "../../state/overlays";
+import { get, set, type Overlay } from "../../state/store";
 
 interface Props {
   title?: ReactNode;
@@ -60,6 +61,25 @@ export function Modal({ title, icon, children, footer, width = 560, height, onCl
         <div className="modal-body">{children}</div>
         {footer && <footer className="modal-footer">{footer}</footer>}
       </div>
+    </div>
+  );
+}
+
+/** Footer links to jump between the three settings dialogs. */
+export function SettingsSwitcher({ current }: { current: "app" | "print" | "doc" }) {
+  const hasDoc = !!get().doc;
+  const go = (o: Overlay) => set({ overlay: o, overlayStack: [] });
+  return (
+    <div className="settings-switcher">
+      <button className={`btn btn-ghost btn-sm ${current === "app" ? "is-active" : ""}`} onClick={() => go({ kind: "appSettings", tab: "general" })}>
+        Application settings
+      </button>
+      <button className={`btn btn-ghost btn-sm ${current === "print" ? "is-active" : ""}`} onClick={() => go({ kind: "printSettings" })}>
+        Print settings
+      </button>
+      <button className={`btn btn-ghost btn-sm ${current === "doc" ? "is-active" : ""}`} disabled={!hasDoc} onClick={() => go({ kind: "docSettings", tab: "general" })}>
+        Document settings
+      </button>
     </div>
   );
 }

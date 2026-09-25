@@ -9,7 +9,7 @@ import { defaultPrintBackend } from "../../print/backend";
 import type { PrintSettings } from "../../print/settings";
 import "../../print/ui/print-ui.css";
 import "../../print/print.css";
-import { Modal } from "./Modal";
+import { Modal, SettingsSwitcher } from "./Modal";
 
 const setSettings = (next: PrintSettings) => set({ printSettings: next });
 
@@ -41,7 +41,7 @@ export function PrintSettingsOverlay() {
   const settings = useApp((s) => s.printSettings);
   const backend = useMemo(() => defaultPrintBackend(), []);
   return (
-    <Modal title="Print settings" icon={<Printer size={16} />} width={720} height="min(86vh, 820px)">
+    <Modal title="Print settings" icon={<Printer size={16} />} width={720} height="min(86vh, 820px)" footer={<SettingsSwitcher current="print" />}>
       <PrintSettingsPanel settings={settings} onChange={setSettings} backend={backend} />
     </Modal>
   );

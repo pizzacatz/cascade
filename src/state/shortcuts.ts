@@ -15,6 +15,8 @@ import {
   clearSelection,
   toggleFocusedView,
   cycleSpace,
+  selectCalendarItem as selectCalendarItemFn,
+  selectColumnItem as selectColumnItemFn,
   type Ctx,
 } from "./nav";
 import {
@@ -111,8 +113,8 @@ export const BINDINGS: Binding[] = [
   { id: "cut", keys: "ctrl+x", contexts: SEL, description: "Cut", category: "clipboard", run: () => void cutSelection() },
   { id: "paste", keys: "ctrl+v", contexts: NAV, description: "Paste", category: "clipboard", run: () => void paste() },
   // History
-  { id: "undo", keys: "ctrl+z", contexts: DOC, description: "Undo", category: "editing", inEditor: true, run: () => { flushEdit(); const l = undo(); if (l) toast(`Undid: ${l}`); } },
-  { id: "redo", keys: "ctrl+y|ctrl+shift+z", contexts: DOC, description: "Redo", category: "editing", inEditor: true, run: () => { const l = redo(); if (l) toast(`Redid: ${l}`); } },
+  { id: "undo", keys: "ctrl+z", contexts: DOC, description: "Undo", category: "editing", inEditor: true, run: () => historyStep("undo") },
+  { id: "redo", keys: "ctrl+y|ctrl+shift+z", contexts: DOC, description: "Redo", category: "editing", inEditor: true, run: () => historyStep("redo") },
   // Views
   { id: "focus-view", keys: "tab", contexts: DOC, description: "Move focus between Columns and Calendar", category: "views", inEditor: true, help: true, run: toggleFocusedView },
   { id: "cycle-views", keys: "shift+tab", contexts: DOC, description: "Cycle Columns / both / Calendar", category: "views", inEditor: true, help: true, run: cycleViewVisibility },
@@ -134,6 +136,22 @@ export const BINDINGS: Binding[] = [
   { id: "open-file", keys: "ctrl+o", contexts: ANY, description: "Open document…", category: "file", run: () => void openDialog() },
   { id: "close-file", keys: "ctrl+shift+w", contexts: DOC, description: "Close document", category: "file", run: () => void closeDocument() },
 ];
+
+/** Undo/redo; while typing, stay in edit mode on the same item. */
+export function historyStep(which: "undo" | "redo"): void {
+  const editing = get().edit?.itemId;
+  if (editing) flushEdit();
+  const label = which === "undo" ? undo() : redo();
+  if (editing) {
+    const it = get().doc?.items[editing];
+    if (it && it.type !== "separator") {
+      (get().view.focusedView === "calendar" && it.scheduleDate ? selectCalendarItemFn : selectColumnItemFn)(it.id);
+      enterEdit(it.id, "end");
+      return;
+    }
+  }
+  if (label) toast(`${which === "undo" ? "Undid" : "Redid"}: ${label}`);
+}
 
 export const bindingById = (id: string) => BINDINGS.find((b) => b.id === id);
 

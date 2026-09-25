@@ -35,6 +35,8 @@ export interface Preferences {
   lastOpenedDocumentPath: string | null;
   showHelp: boolean;
   hideColumnHeaders: boolean;
+  /** Hide the ••• menu buttons in column headers. */
+  hideColumnHeaderButtons: boolean;
   hideFloatingActionMenu: boolean;
   hideCreateItemButton: boolean;
   columnsProgressBar: "hide" | "showToAllColumns";
@@ -49,7 +51,7 @@ export function defaultPreferences(): Preferences {
   return {
     theme: "auto",
     debugMode: "disabled",
-    minColumnWidth: 320,
+    minColumnWidth: 450,
     inlineCommandTrigger: "::",
     headingShortcutTrigger: "#",
     separatorShortcutTrigger: "---",
@@ -60,6 +62,7 @@ export function defaultPreferences(): Preferences {
     lastOpenedDocumentPath: null,
     showHelp: false,
     hideColumnHeaders: false,
+    hideColumnHeaderButtons: false,
     hideFloatingActionMenu: false,
     hideCreateItemButton: false,
     columnsProgressBar: "showToAllColumns",
@@ -90,7 +93,8 @@ export function normalizePreferences(raw: unknown): Preferences {
     debugMode: (["disabled", "speed", "state", "drag"] as const).includes(r.debugMode as DebugMode)
       ? (r.debugMode as DebugMode)
       : "disabled",
-    minColumnWidth: clamp(num(r.minColumnWidth, d.minColumnWidth), MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH),
+    // 320 was an earlier default; upgrade it to the current one.
+    minColumnWidth: r.minColumnWidth === 320 ? d.minColumnWidth : clamp(num(r.minColumnWidth, d.minColumnWidth), MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH),
     inlineCommandTrigger: str(r.inlineCommandTrigger, d.inlineCommandTrigger),
     headingShortcutTrigger: str(r.headingShortcutTrigger, d.headingShortcutTrigger),
     separatorShortcutTrigger: str(r.separatorShortcutTrigger, d.separatorShortcutTrigger),
@@ -103,6 +107,7 @@ export function normalizePreferences(raw: unknown): Preferences {
     lastOpenedDocumentPath: typeof r.lastOpenedDocumentPath === "string" ? r.lastOpenedDocumentPath : null,
     showHelp: bool(r.showHelp, d.showHelp),
     hideColumnHeaders: bool(r.hideColumnHeaders, d.hideColumnHeaders),
+    hideColumnHeaderButtons: bool(r.hideColumnHeaderButtons, d.hideColumnHeaderButtons),
     hideFloatingActionMenu: bool(r.hideFloatingActionMenu, d.hideFloatingActionMenu),
     hideCreateItemButton: bool(r.hideCreateItemButton, d.hideCreateItemButton),
     columnsProgressBar: r.columnsProgressBar === "hide" ? "hide" : "showToAllColumns",

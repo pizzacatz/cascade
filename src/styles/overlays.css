@@ -557,3 +557,14 @@ details summary {
 input[type="range"] {
   accent-color: var(--accent);
 }
+
+.settings-switcher {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  justify-content: center;
+}
+.settings-switcher .is-active {
+  color: var(--accent);
+  background: var(--accent-softer);
+}

@@ -127,6 +127,7 @@
   flex-direction: column;
 }
 .columns-viewport {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -1279,4 +1280,41 @@ button.date-chip:hover {
   color: var(--accent-contrast);
   font-size: 10px;
   font-weight: 700;
+}
+
+.column {
+  position: relative;
+}
+.column-connector {
+  position: absolute;
+  right: -7px;
+  z-index: 4;
+  width: 0;
+  height: 0;
+  margin: -6px 0 0 -1px;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 7px solid var(--c, var(--border-strong));
+  pointer-events: none;
+}
+.column-connector::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: -14px;
+  width: 3px;
+  height: 28px;
+  border-radius: 3px;
+  background: linear-gradient(transparent, color-mix(in oklab, var(--c, var(--accent)) 55%, transparent), transparent);
+}
+.column.is-active .column-title,
+.column.is-active .column-icon {
+  color: var(--accent);
+}
+.column.is-active-edit .column-title,
+.column.is-active-edit .column-icon {
+  color: var(--success);
+}
+.column-title.has-color {
+  color: var(--c);
 }

@@ -1,9 +1,9 @@
 import { Settings, Monitor, Sun, Moon } from "lucide-react";
-import { useApp, updatePrefs } from "../../state/store";
+import { useApp, updatePrefs, toast } from "../../state/store";
 import { confirmAction, openOverlay } from "../../state/overlays";
 import { enablePortableMode, portableStatus } from "../../state/files";
-import { MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, type DebugMode } from "../../state/prefs";
-import { Modal } from "./Modal";
+import { MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, defaultPreferences, type DebugMode } from "../../state/prefs";
+import { Modal, SettingsSwitcher } from "./Modal";
 
 type Tab = "general" | "interface" | "triggers" | "calendar";
 
@@ -30,7 +30,7 @@ export function AppSettings({ tab }: { tab: Tab }) {
   const p = useApp((s) => s.prefs);
   const setTab = (t: Tab) => openOverlay({ kind: "appSettings", tab: t });
   return (
-    <Modal title="Settings" icon={<Settings size={16} />} width={620} height="min(80vh, 600px)">
+    <Modal title="Settings" icon={<Settings size={16} />} width={620} height="min(80vh, 600px)" footer={<SettingsSwitcher current="app" />}>
       <div className="tabs">
         {TABS.map(([id, label]) => (
           <button key={id} className={`tab ${tab === id ? "tab-active" : ""}`} onClick={() => setTab(id)}>
@@ -97,6 +97,7 @@ export function AppSettings({ tab }: { tab: Tab }) {
               <span className="field-hint">Columns and calendar days fill the window at no less than this width.</span>
             </label>
             <Toggle label="Hide column headers" checked={p.hideColumnHeaders} onChange={(v) => updatePrefs({ hideColumnHeaders: v })} />
+            <Toggle label="Hide column buttons in header" checked={p.hideColumnHeaderButtons} onChange={(v) => updatePrefs({ hideColumnHeaderButtons: v })} />
             <Toggle label="Hide the bottom toolbar" checked={p.hideFloatingActionMenu} onChange={(v) => updatePrefs({ hideFloatingActionMenu: v })} />
             <Toggle label="Hide edit-mode footer hints" checked={p.hideCreateItemButton} onChange={(v) => updatePrefs({ hideCreateItemButton: v })} />
             <Toggle
@@ -119,9 +120,19 @@ export function AppSettings({ tab }: { tab: Tab }) {
                 <span className="field-label">{label}</span>
                 <input
                   className="input mono"
-                  value={p[key]}
                   maxLength={8}
-                  onChange={(e) => e.target.value.trim() && updatePrefs({ [key]: e.target.value.trim() })}
+                  defaultValue={p[key]}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim() || defaultPreferences()[key];
+                    const others = (["inlineCommandTrigger", "headingShortcutTrigger", "separatorShortcutTrigger"] as const).filter((k) => k !== key).map((k) => p[k]);
+                    if (others.includes(v)) {
+                      toast("Each trigger must be different", "error");
+                      e.target.value = p[key];
+                      return;
+                    }
+                    e.target.value = v;
+                    updatePrefs({ [key]: v });
+                  }}
                   style={{ width: 120 }}
                 />
                 <span className="field-hint">{hint}</span>

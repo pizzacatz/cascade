@@ -38,7 +38,15 @@ export function Sidebar() {
   );
 
   return (
-    <aside className="sidebar" aria-label="Spaces">
+    <aside
+      className="sidebar"
+      aria-label="Spaces"
+      onContextMenu={(e) => {
+        if ((e.target as HTMLElement).closest("button")) return;
+        e.preventDefault();
+        openOverlay({ kind: "context", x: e.clientX, y: e.clientY, target: { type: "space", spaceId: current } });
+      }}
+    >
       <div className="sidebar-spaces">
         {user.map(chip)}
         <button
