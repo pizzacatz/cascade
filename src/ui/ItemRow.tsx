@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Check, ChevronRight, CalendarDays } from "lucide-react";
+import { Check, ChevronRight, CalendarDays, Plus } from "lucide-react";
 import type { Item, ViewName } from "../model/types";
 import { isContainerType } from "../model/types";
 import { formatShortDay, relativeDayLabel } from "../model/dates";
@@ -14,7 +14,8 @@ import {
   toggleCalendarSelection,
   toggleColumnSelection,
 } from "../state/nav";
-import { toggleFinished } from "../state/items";
+import { addItem, toggleFinished } from "../state/items";
+import { keyLabel } from "../state/shortcuts";
 import { openOverlay } from "../state/overlays";
 import { Icon } from "./icons";
 import { ItemEditor } from "./ItemEditor";
@@ -49,6 +50,9 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
     return "view" in t && t.view === view ? t.kind : null;
   });
   const dragging = useApp((s) => s.drag?.status === "active" && !s.drag.copy && s.drag.ids.includes(item.id));
+  const hideChildButton = useApp((s) => s.prefs.hideCreateItemButton);
+  // Colonnes-style "open a column and add a child here" button, shown on hover.
+  const showChildButton = view === "columns" && !hideChildButton && !editing && item.parentId !== null;
 
   const onMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 || editing) return;
@@ -183,12 +187,25 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
             {relativeDayLabel(day, today()) ?? formatShortDay(day)}
           </span>
         )}
-        {isContainerType(item.type) && (
-          <>
-            {childCount > 0 && <span className="child-count">{childCount}</span>}
-            <ChevronRight size={14} className="chevron" />
-          </>
+        {isContainerType(item.type) && childCount > 0 && <span className="child-count">{childCount}</span>}
+        {showChildButton && (
+          <button
+            className="child-add-btn"
+            title={`${isContainerType(item.type) ? "Add an item inside" : "Turn into a folder and add an item inside"} (${keyLabel("create-child")})`}
+            aria-label="Add child item"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              addItem("task", { view: "columns", parentId: item.id });
+            }}
+          >
+            <Plus size={13} />
+          </button>
         )}
+        {isContainerType(item.type) && <ChevronRight size={14} className="chevron" />}
       </div>
     </div>
   );

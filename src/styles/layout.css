@@ -450,6 +450,32 @@
   color: var(--text-faint);
   font-size: 11px;
 }
+.child-add-btn {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin: -1px 0;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.item-row:hover .child-add-btn,
+.item-row.is-selected .child-add-btn {
+  opacity: 1;
+}
+.child-add-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.app.is-dragging .child-add-btn {
+  display: none;
+}
 .child-count {
   font-variant-numeric: tabular-nums;
 }
