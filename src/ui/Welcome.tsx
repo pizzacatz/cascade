@@ -1,6 +1,6 @@
 import { FilePlus, FolderOpen, LayoutTemplate, FileText, X } from "lucide-react";
 import { useApp, updatePrefs } from "../state/store";
-import { newDocument, openDialog, openPath, clearRecentFiles } from "../state/files";
+import { newDocument, openDialog, openPath, clearRecentFiles, fromStoredPath } from "../state/files";
 import { openCommand } from "../state/overlays";
 import { keyLabel } from "../state/shortcuts";
 import { basename, displayName } from "../platform";
@@ -56,10 +56,10 @@ export function Welcome() {
             <ul>
               {recent.map((p) => (
                 <li key={p}>
-                  <button className="recent-item" onClick={() => void openPath(p)} title={p}>
+                  <button className="recent-item" onClick={() => void openPath(p)} title={fromStoredPath(p)}>
                     <FileText size={15} />
                     <span className="recent-name">{displayName(p)}</span>
-                    <span className="recent-path faint">{p.replace(basename(p), "")}</span>
+                    <span className="recent-path faint">{fromStoredPath(p).replace(basename(p), "")}</span>
                   </button>
                   <button
                     className="btn btn-ghost btn-sm btn-icon"

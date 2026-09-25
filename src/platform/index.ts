@@ -13,6 +13,13 @@ export interface CliPayload {
   requestId?: string;
 }
 
+export interface PortableStatus {
+  enabled: boolean;
+  dataDir: string | null;
+  root: string | null;
+  canEnable: boolean;
+}
+
 export interface FileEntry {
   path: string;
   name: string;
@@ -21,7 +28,7 @@ export interface FileEntry {
 export interface Platform {
   kind: "tauri" | "browser";
   // Documents
-  pickOpenPath(): Promise<string | null>;
+  pickOpenPath(defaultDir?: string): Promise<string | null>;
   pickSavePath(defaultName: string): Promise<string | null>;
   readText(path: string): Promise<string>;
   /** Atomic write: temp file + rename. */
@@ -48,6 +55,10 @@ export interface Platform {
   normalizePath(path: string, cwd?: string): Promise<string>;
   validateCliRequest(requestId: string): Promise<void>;
   completeCliRequest(requestId: string, result: unknown): Promise<void>;
+  // Portable mode (desktop only)
+  portableStatus(): Promise<PortableStatus | null>;
+  enablePortable(): Promise<string>;
+  relaunch(): Promise<void>;
 }
 
 export const basename = (path: string) => path.split(/[\\/]/).pop() ?? path;
@@ -97,10 +108,11 @@ async function tauriPlatform(): Promise<Platform> {
 
   return {
     kind: "tauri",
-    async pickOpenPath() {
+    async pickOpenPath(defaultDir) {
       const r = await dialog.open({
         multiple: false,
         directory: false,
+        defaultPath: defaultDir,
         filters: [{ name: "Cascade document", extensions: ["col"] }],
       });
       return typeof r === "string" ? r : null;
@@ -177,6 +189,12 @@ async function tauriPlatform(): Promise<Platform> {
     normalizePath: (path, cwd) => invoke<string>("normalize_path", { path, cwd: cwd ?? null }),
     validateCliRequest: (requestId) => invoke("validate_cli_request", { requestId }),
     completeCliRequest: (requestId, result) => invoke("complete_cli_request", { requestId, result }),
+    portableStatus: () => invoke<PortableStatus>("portable_status").catch(() => null),
+    enablePortable: () => invoke<string>("enable_portable_mode"),
+    async relaunch() {
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      await relaunch();
+    },
   };
 }
 
@@ -264,6 +282,11 @@ function browserPlatform(): Platform {
     normalizePath: async (path) => path,
     validateCliRequest: async () => {},
     completeCliRequest: async () => {},
+    portableStatus: async () => null,
+    enablePortable: async () => {
+      throw new Error("Portable mode needs the desktop app.");
+    },
+    relaunch: async () => window.location.reload(),
   };
 }
 

@@ -6,6 +6,7 @@
 mod bluetooth;
 mod cli;
 mod mqtt;
+mod portable;
 mod printing;
 mod state;
 
@@ -47,6 +48,10 @@ pub fn run() {
     // Answers --help/--version and waiting CLI commands; returns only when the
     // GUI should start.
     cli::run_client_role_if_requested();
+    // Before anything reads the XDG directories (GTK, WebKit, Tauri paths).
+    if let Some(dir) = portable::init() {
+        eprintln!("Cascade portable mode: data in {}", dir.display());
+    }
     apply_linux_workarounds();
     mqtt::install_crypto_provider();
 
@@ -113,6 +118,8 @@ pub fn run() {
             bluetooth::print_bluetooth,
             mqtt::send_mqtt_message,
             mqtt::send_mqtt_messages_batch,
+            portable::portable_status,
+            portable::enable_portable_mode,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Cascade");

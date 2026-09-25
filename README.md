@@ -48,6 +48,43 @@ Pre-built `.deb`, `.rpm` and AppImage bundles are produced by CI (see
 [`.github/workflows/build.yml`](.github/workflows/build.yml)). To build them yourself, see
 below.
 
+## Portable use (USB stick)
+
+The AppImage is a single file that carries its own WebKitGTK and GTK, so it runs on most
+Linux distributions from 2022 on without installing anything. To carry Cascade — with its
+settings and backups — on a USB stick:
+
+1. Copy `Cascade_x.y.z_amd64.AppImage` onto the stick, next to your `.col` files.
+2. Make it executable if needed: `chmod +x Cascade_*.AppImage`.
+3. Run it and choose **Settings › General › Make portable…** — or simply create an empty
+   folder named `cascade-data` next to the AppImage.
+
+When a `cascade-data` folder sits next to the app, Cascade keeps *everything* there —
+preferences, print settings, document backups, logs and caches — and writes nothing to the
+host computer's home folder. Documents stored on the stick are remembered relative to it,
+so your recent files still open when the stick mounts at a different path on another
+machine. To stop using portable mode, rename or delete the folder. (`CASCADE_DATA_DIR=/path`
+also forces a specific data folder.)
+
+```
+USB stick/
+├── Cascade_0.1.0_amd64.AppImage
+├── cascade-data/          ← settings, backups, logs (created by "Make portable")
+└── My lists.col
+```
+
+Notes:
+
+- **File system:** format the stick as **exFAT** (the default for most sticks) or ext4.
+  Linux mounts FAT32 sticks so that only `.exe`-style files are executable, which stops
+  AppImages from running.
+- **FUSE:** the AppImage uses the modern static runtime, so it does *not* need `libfuse2`.
+  It still needs kernel FUSE support, which every mainstream desktop has; on a system
+  without it, run `./Cascade_*.AppImage --appimage-extract-and-run`.
+- **Compatibility:** release AppImages are built on Ubuntu 22.04, so they run on
+  distributions with glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+, and
+  similar). x86-64 only for now.
+
 ## Build from source
 
 Requirements: Node.js 22+, Rust (stable), and the Tauri 2 Linux dependencies:

@@ -4,7 +4,7 @@
 import type { Doc } from "../model/types";
 import { parseDocument, serializeDocument, normalizeViewState } from "../model/format";
 import { defaultViewState } from "../model/defaults";
-import { basename, displayName, platform } from "../platform";
+import { basename, displayName, platform, type PortableStatus } from "../platform";
 import { get, set, toast, updatePrefs, useApp } from "./store";
 import { normalizePreferences } from "./prefs";
 import { normalizePrintSettings } from "../print/settings";
@@ -17,6 +17,45 @@ const BACKUP_INTERVAL_MS = 10 * 60 * 1000;
 
 const lastBackupAt = new Map<string, number>();
 
+// ---------------------------------------------------------------------------
+// Portable mode: documents stored next to the app (e.g. on the same USB stick)
+// are remembered relative to it, so they still open when the stick mounts at
+// a different path on another computer.
+// ---------------------------------------------------------------------------
+
+const PORTABLE_PREFIX = "portable:";
+let portable: PortableStatus | null = null;
+
+export const portableStatus = () => portable;
+
+function portableRoot(): string | null {
+  return portable?.enabled && portable.root ? portable.root.replace(/\/+$/, "") : null;
+}
+
+/** Path as remembered in preferences. */
+export function toStoredPath(path: string): string {
+  const root = portableRoot();
+  return root && path.startsWith(`${root}/`) ? PORTABLE_PREFIX + path.slice(root.length + 1) : path;
+}
+
+/** Path as usable on this machine. */
+export function fromStoredPath(stored: string): string {
+  const root = portableRoot();
+  if (!stored.startsWith(PORTABLE_PREFIX)) return stored;
+  return root ? `${root}/${stored.slice(PORTABLE_PREFIX.length)}` : stored.slice(PORTABLE_PREFIX.length);
+}
+
+export async function enablePortableMode(): Promise<void> {
+  try {
+    const dir = await platform().enablePortable();
+    await saveNow();
+    toast(`Portable data folder created at ${dir}. Restarting…`, "success");
+    setTimeout(() => void platform().relaunch(), 900);
+  } catch (e) {
+    toast(String(e), "error", 8000);
+  }
+}
+
 function withViewState(doc: Doc): Doc {
   const s = get();
   return { ...doc, config: { ...doc.config, viewState: s.view } };
@@ -24,8 +63,9 @@ function withViewState(doc: Doc): Doc {
 
 function addRecent(path: string) {
   const prefs = get().prefs;
-  const recentFiles = [path, ...prefs.recentFiles.filter((p) => p !== path)].slice(0, RECENT_LIMIT);
-  updatePrefs({ recentFiles, lastOpenedDocumentPath: path });
+  const stored = toStoredPath(path);
+  const recentFiles = [stored, ...prefs.recentFiles.filter((p) => p !== stored && fromStoredPath(p) !== path)].slice(0, RECENT_LIMIT);
+  updatePrefs({ recentFiles, lastOpenedDocumentPath: stored });
 }
 
 export function clearRecentFiles() {
@@ -94,7 +134,9 @@ export async function saveNow(): Promise<boolean> {
   }
 }
 
-export async function openPath(path: string): Promise<boolean> {
+export async function openPath(pathOrStored: string): Promise<boolean> {
+  const stored = pathOrStored;
+  const path = fromStoredPath(pathOrStored);
   if (get().doc) await saveNow();
   let text: string;
   try {
@@ -103,8 +145,8 @@ export async function openPath(path: string): Promise<boolean> {
     toast(`Could not open ${basename(path)}: ${String(e)}`, "error", 6000);
     const prefs = get().prefs;
     updatePrefs({
-      recentFiles: prefs.recentFiles.filter((p) => p !== path),
-      lastOpenedDocumentPath: prefs.lastOpenedDocumentPath === path ? null : prefs.lastOpenedDocumentPath,
+      recentFiles: prefs.recentFiles.filter((p) => p !== stored && p !== path),
+      lastOpenedDocumentPath: prefs.lastOpenedDocumentPath === stored ? null : prefs.lastOpenedDocumentPath,
     });
     return false;
   }
@@ -132,12 +174,14 @@ export async function openPath(path: string): Promise<boolean> {
 }
 
 export async function openDialog(): Promise<void> {
-  const path = await platform().pickOpenPath();
+  const path = await platform().pickOpenPath(portableRoot() ?? undefined);
   if (path) await openPath(path);
 }
 
 export async function newDocument(template: DocTemplate = DOC_TEMPLATES[0]): Promise<void> {
-  const path = await platform().pickSavePath(template.id === "blank" ? "Untitled.col" : `${template.name}.col`);
+  const name = template.id === "blank" ? "Untitled.col" : `${template.name}.col`;
+  const root = portableRoot();
+  const path = await platform().pickSavePath(root ? `${root}/${name}` : name);
   if (!path) return;
   if (get().doc) await saveNow();
   const doc = template.build();
@@ -195,6 +239,7 @@ export async function loadSettings(): Promise<void> {
     p.loadStore(PRINT_STORE).catch(() => ({})),
   ]);
   set({ prefs: normalizePreferences(prefs), printSettings: normalizePrintSettings(print) });
+  portable = await p.portableStatus().catch(() => null);
 }
 
 export function startPersistence(): () => void {

@@ -68,7 +68,7 @@ import {
   flushEdit,
 } from "../../state/items";
 import { copyWithToast, cutSelection } from "../../state/clipboard";
-import { closeDocument, newDocument, openDialog, openPath, clearRecentFiles } from "../../state/files";
+import { closeDocument, newDocument, openDialog, openPath, clearRecentFiles, fromStoredPath } from "../../state/files";
 import { closeOverlay, openOverlay } from "../../state/overlays";
 import { openPrint } from "../../state/printing";
 import { openStack } from "../../state/stack";
@@ -379,7 +379,7 @@ function prepareItems(s: AppState): PItem[] {
 }
 
 function recentItems(s: AppState): PItem[] {
-  return s.prefs.recentFiles.map((p) => ({ id: `recent-${p}`, label: displayName(p), detail: p, icon: <FileText size={15} />, run: () => void openPath(p) }));
+  return s.prefs.recentFiles.map((p) => ({ id: `recent-${p}`, label: displayName(p), detail: fromStoredPath(p), icon: <FileText size={15} />, run: () => void openPath(p) }));
 }
 
 interface SearchFilters {
