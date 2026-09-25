@@ -152,6 +152,8 @@ export interface AppState {
   printSettings: PrintSettings;
   past: HistoryEntry[];
   future: HistoryEntry[];
+  /** Where a toolbar create button would put a new item (shown while hovering it). */
+  createPreview: { afterId?: string; columnStart?: string } | null;
   /** Patches applied since the last successful save (re-applied if the file changes on disk). */
   unsavedPatches: Patch[];
 }
@@ -182,6 +184,7 @@ export const useApp = create<AppState>(() => ({
   past: [],
   future: [],
   unsavedPatches: [],
+  createPreview: null,
 }));
 
 export const get = () => useApp.getState();

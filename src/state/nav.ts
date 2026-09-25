@@ -48,7 +48,11 @@ export function columnIds(s: AppState = get()): string[] {
   const sel = s.view.columnsSelection.filter((id) => ix.items[id]);
   if (sel.length === 1) {
     const it = ix.items[sel[0]];
-    if (isContainerType(it.type) && cols[cols.length - 1] !== it.id && it.parentId === cols[cols.length - 1]) {
+    // A selected folder opens its column; a selected task/text/heading gets a
+    // virtual column offering "Turn into folder and create a new item".
+    const leaf = !isContainerType(it.type);
+    const hideConvert = leaf && !!s.edit; // creation controls are hidden while typing
+    if (it.type !== "separator" && !hideConvert && cols[cols.length - 1] !== it.id && it.parentId === cols[cols.length - 1]) {
       cols.push(it.id);
     }
   }
@@ -78,6 +82,17 @@ export function calendarDays(s: AppState = get(), count = visibleDayCount): stri
 let editExitHook: (() => void) | null = null;
 export function setEditExitHook(fn: () => void) {
   editExitHook = fn;
+}
+
+/** Commit the edit draft without auto-removing an empty item (used when switching views). */
+let editFlushHook: (() => void) | null = null;
+export function setEditFlushHook(fn: () => void) {
+  editFlushHook = fn;
+}
+function leaveEditKeepingItem() {
+  if (!get().edit) return;
+  editFlushHook?.();
+  set({ edit: null });
 }
 
 function exitEditSilently(s: AppState): Partial<AppState> {
@@ -288,6 +303,7 @@ export function cycleSpace(delta: number): void {
 // ---------------------------------------------------------------------------
 
 export function focusView(view: ViewName): void {
+  leaveEditKeepingItem();
   setView((v) => ({
     ...v,
     focusedView: view,
@@ -303,6 +319,7 @@ export function toggleFocusedView(): void {
 }
 
 export function switchView(view: ViewName): void {
+  leaveEditKeepingItem();
   setView((v) => ({
     ...v,
     focusedView: view,
@@ -314,6 +331,7 @@ export function switchView(view: ViewName): void {
 
 /** columns-only → both → calendar-only → columns-only */
 export function cycleViewVisibility(): void {
+  leaveEditKeepingItem();
   const v = get().view;
   if (v.showColumnsView && !v.showCalendarView) {
     setView((x) => ({ ...x, showCalendarView: true }));
@@ -360,15 +378,17 @@ export function navigateVertical(delta: 1 | -1, extend = false): void {
 
   if (!sel.length) {
     const ct = s.createTarget;
-    const list = ct
-      ? ct.view === "columns"
-        ? childrenOf(ix, ct.parentId)
-        : itemsOnDay(ix, ct.date)
-      : cal
-        ? itemsOnDay(ix, calendarDays(s)[0])
-        : childrenOf(ix, columnIds(s).at(-1)!);
+    // From a column's "Create a new item" row, Up returns to the last item.
+    if (ct && delta < 0) {
+      const col = ct.view === "columns" ? childrenOf(ix, ct.parentId) : itemsOnDay(ix, ct.date);
+      const last = col[col.length - 1];
+      if (last) (ct.view === "calendar" ? selectCalendarItem : selectColumnItem)(last.id);
+      return;
+    }
+    if (ct) return;
+    const list = cal ? itemsOnDay(ix, calendarDays(s)[0]) : childrenOf(ix, columnIds(s).at(-1)!);
     const pick = delta > 0 ? list[0] : list[list.length - 1];
-    if (pick) (ct?.view ?? (cal ? "calendar" : "columns")) === "calendar" ? selectCalendarItem(pick.id) : selectColumnItem(pick.id);
+    if (pick) (cal ? selectCalendarItem : selectColumnItem)(pick.id);
     return;
   }
 
@@ -392,6 +412,12 @@ export function navigateVertical(delta: 1 | -1, extend = false): void {
 
   const target = delta > 0 ? sibs[Math.max(...idx) + 1] : sibs[Math.min(...idx) - 1];
   if (target) (cal ? selectCalendarItem : selectColumnItem)(target.id);
+  else if (delta > 0 && sel.length === 1) {
+    // Down from the last item focuses the column's "Create a new item" row.
+    const it = ix.items[sel[0]];
+    if (cal && it.scheduleDate) setCreateTarget({ view: "calendar", date: it.scheduleDate });
+    else if (!cal && it.parentId) setCreateTarget({ view: "columns", parentId: it.parentId });
+  }
   else if (sel.length > 1) (cal ? selectCalendarItem : selectColumnItem)(delta > 0 ? sibs[Math.max(...idx)].id : sibs[Math.min(...idx)].id);
   else if (s.view.showColumnsView && s.view.showCalendarView) {
     // At the edge of a split view: hop to the other view.
@@ -434,7 +460,12 @@ export function navigateRight(): void {
   }
   if (sel.length !== 1) return;
   const it = ix.items[sel[0]];
-  if (!it || !isContainerType(it.type)) return;
+  if (!it || it.type === "separator") return;
+  if (!isContainerType(it.type)) {
+    // Focus the virtual "Turn into folder and create a new item" button.
+    setCreateTarget({ view: "columns", parentId: it.id });
+    return;
+  }
   const kids = childrenOf(ix, it.id);
   if (kids.length) selectColumnItem(kids[0].id);
   else setCreateTarget({ view: "columns", parentId: it.id });

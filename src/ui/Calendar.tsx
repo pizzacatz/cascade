@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, MoreHorizontal, Plus, CalendarCheck, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreHorizontal, CalendarCheck, CalendarDays } from "lucide-react";
 import { itemsOnDay } from "../model/tree";
 import {
   addDays,
@@ -14,10 +14,11 @@ import {
   toDayKey,
 } from "../model/dates";
 import { rulesForDay } from "../model/recurrence";
-import { useApp } from "../state/store";
+import { get, useApp } from "../state/store";
 import { indexOf, today } from "../state/derived";
-import { calendarDays, setCalendarAnchor, setCreateTarget, setVisibleDayCount, shiftCalendar, toggleDayPicker } from "../state/nav";
-import { addItem } from "../state/items";
+import { calendarDays, setCalendarAnchor, setVisibleDayCount, shiftCalendar, toggleDayPicker } from "../state/nav";
+import { exitEdit } from "../state/items";
+import { CreateRow, EditFooter } from "./CreateRow";
 import { openOverlay } from "../state/overlays";
 import { ItemRow } from "./ItemRow";
 
@@ -77,7 +78,8 @@ export function CalendarView() {
 
 function DayColumn({ date, width }: { date: string; width: number }) {
   const doc = useApp((s) => s.doc);
-  const hideCreate = useApp((s) => s.prefs.hideCreateItemButton);
+  const editingHere = useApp((s) => !!s.edit && s.doc?.items[s.edit.itemId]?.scheduleDate === date && s.view.focusedView === "calendar");
+  const busy = useApp((s) => !!s.edit || s.drag?.status === "active");
   const isTarget = useApp((s) => s.createTarget?.view === "calendar" && s.createTarget.date === date);
   const prepared = useApp((s) => s.doc?.config.preparedDays.includes(date) ?? false);
   const dropEnd = useApp((s) => {
@@ -127,7 +129,7 @@ function DayColumn({ date, width }: { date: string; width: number }) {
         className={`column-body ${dropEnd ? "drop-end" : ""}`}
         data-day={date}
         onMouseDown={(e) => {
-          if (e.button === 0 && e.target === e.currentTarget) setCreateTarget({ view: "calendar", date });
+          if (e.button === 0 && e.target === e.currentTarget && get().edit) exitEdit();
         }}
         onContextMenu={(e) => {
           if (e.target !== e.currentTarget) return;
@@ -138,16 +140,8 @@ function DayColumn({ date, width }: { date: string; width: number }) {
         {items.map((it) => (
           <ItemRow key={it.id} item={it} view="calendar" />
         ))}
-        {isTarget && (
-          <div className="create-target-row" onMouseDown={(e) => { e.stopPropagation(); addItem("task", { view: "calendar", date }); }}>
-            <Plus size={14} /> <span>New item</span> <span className="kbd">Enter</span>
-          </div>
-        )}
-        {!hideCreate && !isTarget && (
-          <button className="add-item-btn" onMouseDown={(e) => e.stopPropagation()} onClick={() => addItem("task", { view: "calendar", date })}>
-            <Plus size={14} /> New item
-          </button>
-        )}
+        {!busy && <CreateRow target={{ view: "calendar", date }} focused={isTarget} hint={null} />}
+        {editingHere && <EditFooter allowChild={false} />}
       </div>
     </div>
   );

@@ -21,17 +21,17 @@ import {
   type DocIndex,
 } from "../model/tree";
 import type { OutlineNode } from "../model/outline";
-import { get, set, transact, setView, toast } from "./store";
+import { get, set, transact, setView, toast, type CreateTarget } from "./store";
 import { indexOf, selectionOf } from "./derived";
 import { addDays } from "../model/dates";
 import {
-  columnIds,
   enterEdit,
   selectCalendarItem,
   selectColumnItem,
   selectColumnItems,
   setCreateTarget,
   setEditExitHook,
+  setEditFlushHook,
   calendarDays,
 } from "./nav";
 
@@ -185,7 +185,18 @@ export function createSibling(type: ItemType = "task"): void {
   const s = get();
   const ix = indexOf(s.doc);
   const sel = selectionOf(s);
-  const anchorId = s.edit?.itemId ?? sel[sel.length - 1];
+  let anchorId = s.edit?.itemId ?? sel[0];
+  if (!s.edit && sel.length > 1) {
+    // Insert right after the first selected item in column order.
+    const first = ix.items[sel[0]];
+    const list =
+      focused() === "calendar" && first?.scheduleDate
+        ? itemsOnDay(ix, first.scheduleDate)
+        : first?.parentId
+          ? childrenOf(ix, first.parentId)
+          : [];
+    anchorId = list.find((x) => sel.includes(x.id))?.id ?? anchorId;
+  }
   const anchor = anchorId ? ix.items[anchorId] : null;
   if (!anchor) {
     createInCurrentColumn(type);
@@ -213,19 +224,45 @@ export function createChild(type: ItemType = "task"): void {
 export function createInCurrentColumn(type: ItemType = "task"): void {
   const s = get();
   const ct = s.createTarget;
-  if (ct?.view === "calendar") {
-    addItem(type, { view: "calendar", date: ct.date });
-    return;
-  }
-  if (ct?.view === "columns") {
-    addItem(type, { view: "columns", parentId: ct.parentId });
+  if (ct) {
+    createAtTarget(ct, type);
     return;
   }
   if (s.view.focusedView === "calendar") {
     addItem(type, { view: "calendar", date: calendarDays(s)[0] });
     return;
   }
-  addItem(type, { view: "columns", parentId: columnIds(s).at(-1)! });
+  // Nothing selected: bottom of the current space's root column.
+  addItem(type, { view: "columns", parentId: s.view.currentSpaceId });
+}
+
+/** Where each item made from a create row came from (for selection after auto-removal). */
+const createOrigins = new Map<string, CreateTarget>();
+
+/** Activate a "Create a new item" row or the "Turn into folder…" button. */
+export function createAtTarget(target: CreateTarget, type: ItemType = "task"): string | null {
+  const id =
+    target.view === "calendar"
+      ? addItem(type, { view: "calendar", date: target.date })
+      : addItem(type, { view: "columns", parentId: target.parentId });
+  if (id) createOrigins.set(id, target);
+  return id;
+}
+
+/** Enter / Ctrl+Enter while editing: commit, then create — the edited item is kept even if empty. */
+export function createFromEdit(kind: "sibling" | "child"): void {
+  const s = get();
+  if (!s.edit) return;
+  const id = s.edit.itemId;
+  flushEdit();
+  set({ edit: null });
+  const view = focused();
+  if (view === "calendar") {
+    if (kind === "child") return;
+    selectCalendarItem(id);
+  } else selectColumnItem(id);
+  if (kind === "child") createChild();
+  else createSibling();
 }
 
 // ---------------------------------------------------------------------------
@@ -265,9 +302,12 @@ export function exitEdit(): void {
   }
   if (draft.trim() === "" && childrenOf(ix, itemId).length === 0 && it.type !== "separator") {
     const view = focused();
-    const next = selectionAfterRemoval(ix, [itemId], view);
+    const list = view === "calendar" && it.scheduleDate ? itemsOnDay(ix, it.scheduleDate) : it.parentId ? childrenOf(ix, it.parentId) : [];
+    const i = list.findIndex((x) => x.id === itemId);
+    const prev = i > 0 ? list[i - 1].id : null;
+    const origin = createOrigins.get(itemId);
+    createOrigins.delete(itemId);
     const parentId = it.parentId;
-    const date = it.scheduleDate;
     set({ edit: null });
     transact("Remove empty item", (d) => {
       const x = d.items[itemId];
@@ -279,9 +319,10 @@ export function exitEdit(): void {
         delete d.items[itemId];
       }
     });
-    reselect(view, next, () => {
-      if (view === "calendar" && date) setCreateTarget({ view: "calendar", date });
-      else if (parentId) setCreateTarget({ view: "columns", parentId });
+    reselect(view, prev, () => {
+      if (origin) setCreateTarget(origin);
+      else if (parentId && indexOf(get().doc).items[parentId]) selectColumnItem(parentId);
+      else set((st) => ({ view: view === "calendar" ? { ...st.view, calendarSelection: [] } : { ...st.view, columnsSelection: [] } }));
     });
     return;
   }
@@ -290,6 +331,7 @@ export function exitEdit(): void {
 }
 
 setEditExitHook(() => exitEdit());
+setEditFlushHook(() => flushEdit());
 
 /** Apply an inline trigger (heading / separator) to the item being edited. */
 export function convertEditedItem(type: ItemType, newText: string): void {

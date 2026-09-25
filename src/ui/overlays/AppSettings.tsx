@@ -98,7 +98,7 @@ export function AppSettings({ tab }: { tab: Tab }) {
             </label>
             <Toggle label="Hide column headers" checked={p.hideColumnHeaders} onChange={(v) => updatePrefs({ hideColumnHeaders: v })} />
             <Toggle label="Hide the bottom toolbar" checked={p.hideFloatingActionMenu} onChange={(v) => updatePrefs({ hideFloatingActionMenu: v })} />
-            <Toggle label="Hide “New item” and “Add child” buttons" checked={p.hideCreateItemButton} onChange={(v) => updatePrefs({ hideCreateItemButton: v })} />
+            <Toggle label="Hide edit-mode footer hints" checked={p.hideCreateItemButton} onChange={(v) => updatePrefs({ hideCreateItemButton: v })} />
             <Toggle
               label="Show progress in columns"
               hint="Progress rings on column headers and folders."

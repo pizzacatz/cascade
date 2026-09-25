@@ -1,13 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreHorizontal, Trash2 } from "lucide-react";
 import type { Item } from "../model/types";
 import { TRASH_SPACE_ID, isContainerType } from "../model/types";
 import { childrenOf } from "../model/tree";
 import { columnProgress } from "../model/progression";
-import { set, useApp } from "../state/store";
+import { get, set, useApp } from "../state/store";
 import { indexOf, statsOf } from "../state/derived";
-import { columnIds, selectColumnItem, setCreateTarget } from "../state/nav";
-import { addItem, emptyTrash } from "../state/items";
+import { columnIds, selectColumnItem } from "../state/nav";
+import { emptyTrash, exitEdit } from "../state/items";
+import { ConvertColumn, CreateRow, EditFooter, type CreateHint } from "./CreateRow";
 import { confirmAction, openOverlay } from "../state/overlays";
 import { Icon } from "./icons";
 import { ItemRow } from "./ItemRow";
@@ -53,7 +54,7 @@ export function ColumnsView() {
       <div className="columns-viewport" ref={ref}>
         <div className="columns-strip" style={{ transform: `translateX(${-eff * colWidth}px)` }}>
           {cols.map((id, i) => (
-            <Column key={id} columnId={id} openChildId={cols[i + 1]} width={colWidth} />
+            <ColumnOrConvert key={id} columnId={id} openChildId={cols[i + 1]} width={colWidth} />
           ))}
         </div>
       </div>
@@ -71,10 +72,21 @@ export function ColumnsView() {
   );
 }
 
+function ColumnOrConvert(props: { columnId: string; openChildId?: string; width: number }) {
+  const leaf = useApp((s) => {
+    const it = s.doc?.items[props.columnId];
+    return !!it && !isContainerType(it.type);
+  });
+  return leaf ? <ConvertColumn itemId={props.columnId} width={props.width} /> : <Column {...props} />;
+}
+
 function Column({ columnId, openChildId, width }: { columnId: string; openChildId?: string; width: number }) {
   const doc = useApp((s) => s.doc);
   const hideHeader = useApp((s) => s.prefs.hideColumnHeaders);
-  const hideCreate = useApp((s) => s.prefs.hideCreateItemButton);
+  const editingHere = useApp((s) => !!s.edit && s.doc?.items[s.edit.itemId]?.parentId === columnId && s.view.focusedView === "columns");
+  const busy = useApp((s) => !!s.edit || s.drag?.status === "active");
+  const previewTop = useApp((s) => s.createPreview?.columnStart === columnId);
+  const hasSelection = useApp((s) => s.view.columnsSelection.length > 0);
   const showProgress = useApp((s) => s.prefs.columnsProgressBar !== "hide");
   const isTarget = useApp((s) => s.createTarget?.view === "columns" && s.createTarget.parentId === columnId);
   const dropEnd = useApp((s) => {
@@ -102,10 +114,14 @@ function Column({ columnId, openChildId, width }: { columnId: string; openChildI
     });
   };
 
+  // Clicking empty column space only ends editing; it never creates anything.
   const onBodyMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 || e.target !== e.currentTarget) return;
-    setCreateTarget({ view: "columns", parentId: columnId });
+    if (get().edit) exitEdit();
   };
+  const isSpaceRoot = ix.spaceIds.has(columnId);
+  const showCreateRow = !busy && !isTrash && (kids.length > 0 || isSpaceRoot || hasSelection || isTarget);
+  const hint: CreateHint = kids.length ? null : isTarget ? "enter" : isSpaceRoot && !hasSelection ? "pulse" : "ctrl-enter";
 
   const onBodyContext = (e: React.MouseEvent) => {
     if (e.target !== e.currentTarget) return;
@@ -145,7 +161,7 @@ function Column({ columnId, openChildId, width }: { columnId: string; openChildI
       )}
       {showProgress && progress >= 0 && hideHeader && <div className="column-bar" style={{ width: `${progress * 100}%` }} />}
       <div
-        className={`column-body ${dropEnd ? "drop-end" : ""}`}
+        className={`column-body ${dropEnd ? "drop-end" : ""} ${previewTop ? "preview-top" : ""}`}
         data-column-id={columnId}
         onMouseDown={onBodyMouseDown}
         onContextMenu={onBodyContext}
@@ -154,21 +170,9 @@ function Column({ columnId, openChildId, width }: { columnId: string; openChildI
         {kids.map((it) => (
           <ItemRow key={it.id} item={it} view="columns" open={it.id === openChildId && isContainerType(it.type)} />
         ))}
-        {isTarget && (
-          <div className="create-target-row" onMouseDown={(e) => { e.stopPropagation(); addItem("task", { view: "columns", parentId: columnId }); }}>
-            <Plus size={14} /> <span>New item</span> <span className="kbd">Enter</span>
-          </div>
-        )}
-        {!hideCreate && !isTarget && !isTrash && (
-          <button
-            className="add-item-btn"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={() => addItem("task", { view: "columns", parentId: columnId })}
-          >
-            <Plus size={14} /> New item
-          </button>
-        )}
-        {kids.length === 0 && !isTarget && <div className="column-empty">{isTrash ? "Trash is empty" : "Empty"}</div>}
+        {showCreateRow && <CreateRow target={{ view: "columns", parentId: columnId }} focused={isTarget} hint={hint} />}
+        {editingHere && <EditFooter allowChild />}
+        {kids.length === 0 && isTrash && <div className="column-empty">Trash is empty</div>}
       </div>
       {isTrash && (
         <footer className="trash-footer">

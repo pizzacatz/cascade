@@ -82,7 +82,14 @@ function updateTitle() {
 }
 
 function loadDoc(doc: Doc, path: string) {
-  const view = doc.config.viewState ?? defaultViewState();
+  let view = doc.config.viewState ?? defaultViewState();
+  if (!view.columnsSelection.length && !view.calendarSelection.length) {
+    // Like Colonnes: opening a document selects its first root item.
+    const first = Object.values(doc.items)
+      .filter((i) => i.parentId === view.currentSpaceId && i.position)
+      .sort((a, b) => (a.position! < b.position! ? -1 : 1))[0];
+    if (first) view = { ...view, columnsSelection: [first.id], columnsPath: [] };
+  }
   set({
     doc,
     filePath: path,

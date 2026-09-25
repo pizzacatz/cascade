@@ -134,9 +134,9 @@ function rootItems(s: AppState): PItem[] {
     const what = n === 1 ? `“${(items[0].text || "item").slice(0, 40)}”` : `${n} items`;
     push(`Selection · ${what}`, [
       ...(n === 1 && items[0].parentId && items[0].type !== "separator"
-        ? [{ id: "add-child", label: "Add child item", icon: <Plus size={15} />, hint: keyLabel("create-child"), keywords: "subtask nest new", run: () => addItem("task", { view: "columns", parentId: items[0].id }) }]
+        ? [{ id: "add-child", label: "Create Child Item", icon: <Plus size={15} />, hint: keyLabel("create-child"), keywords: "subtask nest new add folder", run: () => addItem("task", { view: "columns", parentId: items[0].id }) }]
         : []),
-      { id: "add-below", label: "Add item below", icon: <Plus size={15} />, hint: keyLabel("create-sibling"), keywords: "new sibling", run: () => createSibling() },
+      { id: "add-below", label: "Create New Item", icon: <Plus size={15} />, hint: keyLabel("create-sibling"), keywords: "new add below sibling", run: () => createSibling() },
       { id: "toggle-status", label: "Toggle finished", icon: <CheckSquare size={15} />, hint: keyLabel("toggle-finished"), run: () => toggleFinished(sel) },
       { id: "types", label: "Turn into…", icon: <Shapes size={15} />, page: "types", keywords: "type convert task heading folder text separator template" },
       { id: "colors", label: "Color…", icon: <Palette size={15} />, page: "colors", keywords: "colour" },
@@ -160,7 +160,7 @@ function rootItems(s: AppState): PItem[] {
     const scope = date ? { date } : { parentId: parentId! };
     const colName = date ? formatLongDay(date) : ix.items[parentId!]?.text || ix.spaces.find((x) => x.id === parentId)?.name || "column";
     push(`Current ${cal ? "day" : "column"} · ${colName}`, [
-      { id: "new-here", label: "New item here", icon: <Plus size={15} />, run: () => addItem("task", date ? { view: "calendar", date } : { view: "columns", parentId: parentId! }) },
+      { id: "new-here", label: "Create New Item here", icon: <Plus size={15} />, run: () => addItem("task", date ? { view: "calendar", date } : { view: "columns", parentId: parentId! }) },
       { id: "template-here", label: "Insert template…", icon: <BookmarkCheck size={15} />, hint: keyLabel("template"), run: () => openOverlay({ kind: "template", target: date ? { date } : { parentId: parentId! } }) },
       { id: "print-col", label: `Print current ${cal ? "day" : "column"}`, icon: <Printer size={15} />, run: () => openPrint(date ? { kind: "day", date } : { kind: "column", parentId: parentId! }) },
       { id: "stack-col", label: `Launch stack on current ${cal ? "day" : "column"}`, icon: <Layers size={15} />, run: () => openStack(date ? { kind: "day", date } : { kind: "column", parentId: parentId! }) },

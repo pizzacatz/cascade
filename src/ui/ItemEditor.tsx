@@ -8,7 +8,7 @@ import { childrenOf } from "../model/tree";
 import { get, set, useApp } from "../state/store";
 import { indexOf } from "../state/derived";
 import { enterEdit, selectColumnItem, updateDraft, selectCalendarItem } from "../state/nav";
-import { convertEditedItem, createChild, createSibling, exitEdit, flushEdit } from "../state/items";
+import { convertEditedItem, createFromEdit, createSibling, exitEdit } from "../state/items";
 
 function placeCaret(el: HTMLElement, caret: "start" | "end" | number) {
   const sel = window.getSelection();
@@ -96,15 +96,16 @@ export function ItemEditor({ item, view, className }: { item: Item; view: "colum
     const cmd = prefs.inlineCommandTrigger;
 
     if (sep && text.trim() === sep && item.type !== "separator") {
+      // A separator, then straight on to a new item after it.
       convertEditedItem("separator", "");
+      selectColumnOrDay(item.id, view);
+      createSibling();
       return;
     }
-    // Like Markdown, the heading trigger fires once it is followed by a space.
-    if (head && item.type !== "heading" && text.startsWith(`${head} `) && text !== sep) {
-      const rest = text.slice(head.length + 1);
-      convertEditedItem("heading", rest);
-      el.textContent = rest;
-      placeCaret(el, "end");
+    // Typing the heading trigger as the whole text turns the item into a heading.
+    if (head && item.type !== "heading" && text === head && !(sep && sep.startsWith(text) && sep !== text)) {
+      convertEditedItem("heading", "");
+      el.textContent = "";
       return;
     }
     if (cmd && text.includes(cmd)) {
@@ -137,16 +138,7 @@ export function ItemEditor({ item, view, className }: { item: Item; view: "colum
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
-      const text = get().edit?.draft ?? "";
-      if (e.ctrlKey) {
-        flushEdit();
-        createChild();
-      } else if (text.trim() === "" && !e.shiftKey) {
-        exitEdit();
-      } else {
-        flushEdit();
-        createSibling("task");
-      }
+      createFromEdit(e.ctrlKey ? "child" : "sibling");
       return;
     }
     if (e.key === "Escape") {
@@ -227,6 +219,10 @@ function syncDraftToDom(ref: React.RefObject<HTMLDivElement | null>) {
       placeCaret(el, "end");
     }
   });
+}
+
+function selectColumnOrDay(id: string, view: "columns" | "calendar") {
+  (view === "calendar" ? selectCalendarItem : selectColumnItem)(id);
 }
 
 /** Move editing to another item: selecting commits (or removes) the current one first. */

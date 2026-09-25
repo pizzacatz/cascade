@@ -77,10 +77,13 @@ function computeTarget(d: DragState, x: number, y: number): DropTarget | null {
     // Can't drop onto (or into) something being dragged.
     if (moving.has(itemId) || d.ids.some((id) => isAncestor(ix, id, itemId))) return null;
     if (d.palette && d.palette.kind !== "type") return { kind: "into", itemId };
+    // Folders and templates can't live on the calendar.
+    if (view === "calendar" && d.palette?.kind === "type" && isContainerType(d.palette.type as ItemType)) return null;
     const r = row.getBoundingClientRect();
     const rel = (y - r.top) / r.height;
     const canInto = view === "columns" && childPolicy(it.type) !== "blocked";
-    if (canInto && rel > 0.28 && rel < 0.72) return { kind: "into", itemId };
+    // Top quarter: before; middle half: into; bottom quarter: after.
+    if (canInto && rel >= 0.25 && rel <= 0.75) return { kind: "into", itemId };
     return { kind: rel < 0.5 ? "before" : "after", itemId, view };
   }
   const space = el.closest<HTMLElement>("[data-space-id]");
@@ -98,6 +101,7 @@ function computeTarget(d: DragState, x: number, y: number): DropTarget | null {
   const day = el.closest<HTMLElement>("[data-day]");
   if (day) {
     if (d.palette && d.palette.kind !== "type") return null;
+    if (d.palette?.kind === "type" && isContainerType(d.palette.type as ItemType)) return null;
     return { kind: "day-end", date: day.dataset.day! };
   }
   return null;

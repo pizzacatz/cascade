@@ -2,7 +2,6 @@ import {
   Pencil,
   CornerDownRight,
   ArrowDownToLine,
-  ArrowUpToLine,
   CheckSquare,
   Copy,
   Scissors,
@@ -28,7 +27,7 @@ import {
   Settings2,
 } from "lucide-react";
 import { COLORS, ITEM_TYPES, TRASH_SPACE_ID, childPolicy, isContainerType, isTaggableType, type Color, type ItemType } from "../../model/types";
-import { childrenOf, isUserSpace, itemsOnDay } from "../../model/tree";
+import { isUserSpace } from "../../model/tree";
 import { get, type ContextTarget, type PrintScopeRef } from "../../state/store";
 import { indexOf, selectionOf, today } from "../../state/derived";
 import { enterEdit, selectColumnItem } from "../../state/nav";
@@ -64,6 +63,7 @@ import {
 import { keyLabel } from "../../state/shortcuts";
 import { Menu, type MenuEntry } from "./Menu";
 import { Icon } from "../icons";
+import { TypeIcon } from "../TypeIcon";
 
 const TYPE_LABEL: Record<ItemType, string> = {
   task: "Task",
@@ -108,14 +108,22 @@ function itemEntries(itemId: string, view: "columns" | "calendar"): MenuEntry[] 
   return [
     { label: "Edit", icon: <Pencil size={14} />, hint: keyLabel("edit"), disabled: it.type === "separator" || ids.length > 1, run: () => { selectColumnOrCal(itemId, view); enterEdit(itemId); } },
     {
-      label: "Add child item",
-      icon: <CornerDownRight size={14} />,
-      hint: keyLabel("create-child"),
-      disabled: childPolicy(it.type) === "blocked" || !it.parentId,
-      run: () => addItem("task", { view: "columns", parentId: itemId }),
+      label: "Create Below",
+      icon: <ArrowDownToLine size={14} />,
+      hint: keyLabel("create-sibling"),
+      submenu: typeEntries(view === "calendar" ? CALENDAR_TYPES : ITEM_TYPES, (t) => addBelow(itemId, view, t)),
     },
-    { label: "Add item below", icon: <ArrowDownToLine size={14} />, hint: keyLabel("create-sibling"), run: () => addNear(itemId, view, "below") },
-    { label: "Add item above", icon: <ArrowUpToLine size={14} />, run: () => addNear(itemId, view, "above") },
+    ...(view === "columns" && it.parentId
+      ? [
+          {
+            label: "Create Child",
+            icon: <CornerDownRight size={14} />,
+            hint: keyLabel("create-child"),
+            disabled: childPolicy(it.type) === "blocked",
+            submenu: typeEntries(ITEM_TYPES, (t) => addItem(t, { view: "columns", parentId: itemId })),
+          },
+        ]
+      : []),
     { label: "Toggle finished", icon: <CheckSquare size={14} />, hint: keyLabel("toggle-finished"), disabled: !anyTask, run: () => toggleFinished(ids) },
     { separator: true },
     {
@@ -177,20 +185,18 @@ function isInTrashId(id: string): boolean {
   return false;
 }
 
-/** Create a task right below or above an item, in the same column (or day). */
-function addNear(itemId: string, view: "columns" | "calendar", where: "below" | "above") {
-  const ix = indexOf(get().doc);
-  const it = ix.items[itemId];
+const CALENDAR_TYPES: ItemType[] = ["task", "text", "heading", "separator"];
+
+function typeEntries(types: readonly ItemType[], create: (t: ItemType) => void): MenuEntry[] {
+  return types.map((t) => ({ label: TYPE_LABEL[t], icon: <TypeIcon type={t} />, run: () => create(t) }));
+}
+
+/** Create an item of a type right after an item, in the same column (or day). */
+function addBelow(itemId: string, view: "columns" | "calendar", type: ItemType) {
+  const it = indexOf(get().doc).items[itemId];
   if (!it) return;
-  if (view === "calendar" && it.scheduleDate) {
-    const day = itemsOnDay(ix, it.scheduleDate);
-    const i = day.findIndex((x) => x.id === itemId);
-    addItem("task", { view: "calendar", date: it.scheduleDate, afterId: where === "below" ? itemId : i > 0 ? day[i - 1].id : null });
-  } else if (it.parentId) {
-    const sibs = childrenOf(ix, it.parentId);
-    const i = sibs.findIndex((x) => x.id === itemId);
-    addItem("task", { view: "columns", parentId: it.parentId, afterId: where === "below" ? itemId : i > 0 ? sibs[i - 1].id : null });
-  }
+  if (view === "calendar" && it.scheduleDate) addItem(type, { view: "calendar", date: it.scheduleDate, afterId: itemId });
+  else if (it.parentId) addItem(type, { view: "columns", parentId: it.parentId, afterId: itemId });
 }
 
 function selectColumnOrCal(id: string, view: "columns" | "calendar") {
@@ -210,7 +216,12 @@ function surfaceEntries(t: Extract<ContextTarget, { type: "surface" }>): MenuEnt
   const templateTarget = "date" in scope ? { date: scope.date } : { parentId: scope.parentId };
   const isTrash = "parentId" in scope && scope.parentId === TRASH_SPACE_ID;
   return [
-    { label: "New item", icon: <Plus size={14} />, disabled: isTrash, run: () => addItem("task", place) },
+    {
+      label: "Create New Item",
+      icon: <Plus size={14} />,
+      disabled: isTrash,
+      submenu: typeEntries("date" in scope ? CALENDAR_TYPES : ITEM_TYPES, (t) => addItem(t, place)),
+    },
     { label: "Paste", icon: <ClipboardPaste size={14} />, run: () => void paste() },
     { label: "Insert template…", icon: <BookmarkCheck size={14} />, disabled: isTrash, run: () => openOverlay({ kind: "template", target: templateTarget }) },
     { separator: true },

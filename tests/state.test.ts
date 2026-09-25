@@ -3,9 +3,14 @@ import { emptyDoc, makeItem } from "../src/model/defaults";
 import { buildIndex, childrenOf } from "../src/model/tree";
 import { todayKey } from "../src/model/dates";
 import { get, set, undo, redo } from "../src/state/store";
-import { selectColumnItem, selectColumnItems } from "../src/state/nav";
+import { enterEdit, navigateRight, navigateVertical, selectColumnItem, selectColumnItems } from "../src/state/nav";
 import {
   addItem,
+  createFromEdit,
+  createInCurrentColumn,
+  createSibling,
+  exitEdit,
+  createAtTarget,
   deleteSelection,
   duplicateSelection,
   emptyTrash,
@@ -115,6 +120,50 @@ describe("item operations", () => {
     set({ doc: { ...d, items: { ...d.items, a: { ...d.items.a, text: "zeta" }, c: { ...d.items.c, text: "alpha" } } } });
     sortColumn({ parentId: "F" }, "alphabetical");
     expect(names("F")).toEqual(["alpha", "b", "zeta"]);
+  });
+});
+
+describe("Colonnes-style creation", () => {
+  it("Shift+Enter inserts after the first selected item", () => {
+    selectColumnItems(["a", "c"]);
+    createSibling();
+    expect(names("F")).toEqual(["a", "", "b", "c"]);
+  });
+
+  it("Enter with nothing selected adds to the bottom of the space root", () => {
+    set({ view: { ...get().view, columnsSelection: [], columnsPath: ["F"] } });
+    createInCurrentColumn();
+    expect(names("root")).toEqual(["F", ""]);
+  });
+
+  it("Enter while editing keeps an empty item and creates the next one", () => {
+    selectColumnItem("a");
+    addItem("task", { view: "columns", parentId: "F", afterId: "a" });
+    createFromEdit("sibling");
+    expect(names("F")).toEqual(["a", "", "", "b", "c"]);
+  });
+
+  it("down from the last item focuses the column's create row; right on a task focuses the convert button", () => {
+    selectColumnItem("c");
+    navigateVertical(1);
+    expect(get().createTarget).toEqual({ view: "columns", parentId: "F" });
+    selectColumnItem("b");
+    navigateRight();
+    expect(get().createTarget).toEqual({ view: "columns", parentId: "b" });
+    createAtTarget(get().createTarget!);
+    expect(get().doc!.items.b.type).toBe("folder");
+    expect(get().edit).not.toBeNull();
+  });
+
+  it("removing an empty new item selects the previous sibling, else its create row", () => {
+    selectColumnItem("b");
+    createSibling();
+    exitEdit();
+    expect(get().view.columnsSelection).toEqual(["b"]);
+    const id = createAtTarget({ view: "columns", parentId: "a" })!;
+    enterEdit(id);
+    exitEdit();
+    expect(get().createTarget).toEqual({ view: "columns", parentId: "a" });
   });
 });
 
