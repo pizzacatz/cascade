@@ -54,8 +54,16 @@ export function ConvertColumn({ itemId, width }: { itemId: string; width: number
   const dropHere = useApp(
     (s) => (s.drag?.status === "active" && s.drag.target?.kind === "column-end" && s.drag.target.parentId === itemId) || s.createPreview?.columnStart === itemId,
   );
+  const hideHeader = useApp((s) => s.prefs.hideColumnHeaders);
+  const title = useApp((s) => s.doc?.items[itemId]?.text ?? "");
   return (
     <div className="column convert-column" style={{ width }} data-column-id={itemId}>
+      {/* Same header height as real columns, so the button lines up with the first row. */}
+      {!hideHeader && (
+        <header className="column-header convert-header">
+          <span className="column-title">{title}</span>
+        </header>
+      )}
       <div className={`convert-body ${dropHere ? "drop-end" : ""}`} data-column-id={itemId}>
         <button
           className={`convert-btn ${focused ? "is-focused" : ""}`}
@@ -67,10 +75,10 @@ export function ConvertColumn({ itemId, width }: { itemId: string; width: number
           title={`Turn into folder and create a new item (${keyLabel("create-child")})`}
         >
           <span className="convert-icons">
-            <ArrowLeftRight size={15} />
-            <Folder size={17} />
+            <ArrowLeftRight size={14} />
+            <Folder size={15} />
           </span>
-          <span>Turn into folder and create a new item</span>
+          <span className="convert-label">Turn into folder and create a new item</span>
           {focused && <span className="kbd">Enter</span>}
         </button>
       </div>
