@@ -8,7 +8,12 @@ import {
   defaultPrintSettings,
   normalizePrintSettings,
   isImageMode,
+  effectivePrintOption,
+  printOptionsFor,
+  printSettingsProblem,
 } from "../src/print/settings";
+import { capTickets, countItems, estimateLines } from "../src/print/limits";
+import type { Ticket } from "../src/print/tickets";
 import { encodeTicketsDirect, resolveCodepageMapping, wrapColumns, type EncoderConfig } from "../src/print/encode";
 import { bytesToBase64, fillMqttTemplate } from "../src/print/dispatch";
 import { ticketWidthPx } from "../src/print/render-image";
@@ -210,5 +215,73 @@ describe("mqtt template", () => {
   });
   it("base64-encodes bytes", () => {
     expect(bytesToBase64(new Uint8Array([65, 66, 67]))).toBe("QUJD");
+  });
+});
+
+describe("system print settings", () => {
+  it("defaults and clamps the classic layout options", () => {
+    const d = defaultPrintSettings().printing.classic;
+    expect(d).toEqual({ color: true, layout: 1, fontSize: 11, marginX: 4, marginY: 4 });
+    const s = normalizePrintSettings({
+      printing: { classic: { color: false, layout: "2", fontSize: 99, marginX: -5, marginY: "abc" } },
+    });
+    expect(s.printing.classic).toEqual({ color: false, layout: 2, fontSize: 24, marginX: 0, marginY: 4 });
+    expect(normalizePrintSettings({ printing: { classic: { layout: 3, fontSize: 2 } } }).printing.classic).toMatchObject({
+      layout: 1,
+      fontSize: 7,
+    });
+  });
+
+  it("maps task tickets to selection tickets in System Print mode", () => {
+    const s = defaultPrintSettings();
+    s.printOption = "task_tickets_recursive";
+    expect(effectivePrintOption(s)).toBe("selection_tickets_recursive");
+    s.printOption = "task_tickets";
+    expect(effectivePrintOption(s)).toBe("selection_tickets");
+    expect(printOptionsFor("classic")).toEqual(["selection_tickets", "selection_tickets_recursive"]);
+    s.printing.mode = "receipt_printer";
+    expect(effectivePrintOption(s)).toBe("task_tickets");
+    expect(printOptionsFor("receipt_printer")).toHaveLength(4);
+  });
+
+  it("reports incomplete printer setups", () => {
+    const s = defaultPrintSettings();
+    expect(printSettingsProblem(s)).toBeNull();
+    s.printing.mode = "receipt_printer";
+    s.printing.receipt.printerId = "";
+    expect(printSettingsProblem(s)).toMatch(/printer/i);
+    s.printing.receipt.printerId = "usb:1";
+    expect(printSettingsProblem(s)).toBeNull();
+    s.printing.mode = "mqtt";
+    s.printing.mqtt.brokerUrl = " ";
+    expect(printSettingsProblem(s)).toMatch(/broker/i);
+    s.printing.mode = "bluetooth_printer";
+    s.printing.bluetooth.deviceId = "";
+    expect(printSettingsProblem(s)).toMatch(/Bluetooth/);
+  });
+});
+
+describe("print limits", () => {
+  const ticket = (n: number, withTitle = true): Ticket => ({
+    breadcrumb: null,
+    title: withTitle ? "T" : null,
+    blocks: Array.from({ length: n }, (_, i) => ({ kind: "task" as const, text: `x${i}`, finished: false, depth: 0 })),
+    taskIds: Array.from({ length: n }, (_, i) => `id${i}`),
+  });
+
+  it("counts items and estimates lines", () => {
+    const ts = [ticket(3), ticket(2, false)];
+    expect(countItems(ts)).toBe(5);
+    expect(estimateLines(ts)).toBe(3 + 1 + 1 + 2 + 1);
+  });
+
+  it("caps output to the item limit, trimming the crossing ticket", () => {
+    const ts = [ticket(6), ticket(6), ticket(6)];
+    expect(capTickets(ts, 100)).toEqual({ tickets: ts, capped: false });
+    const r = capTickets(ts, 8);
+    expect(r.capped).toBe(true);
+    expect(r.tickets).toHaveLength(2);
+    expect(countItems(r.tickets)).toBe(8);
+    expect(r.tickets[1].taskIds).toEqual(["id0", "id1"]);
   });
 });

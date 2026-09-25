@@ -3,6 +3,7 @@
 
 import "./print.css";
 import type { Ticket, TicketBlock } from "./tickets";
+import { defaultClassicConfig, type ClassicConfig } from "./settings";
 
 const ROOT_ID = "print-root";
 
@@ -26,10 +27,18 @@ function renderBlock(b: TicketBlock): HTMLElement {
   return row;
 }
 
+/** Accepts a full System Print config, or just the colour flag. */
+function toConfig(cfg: ClassicConfig | boolean): ClassicConfig {
+  return typeof cfg === "boolean" ? { ...defaultClassicConfig(), color: cfg } : cfg;
+}
+
 /** Build the printable DOM for tickets (also used for on-screen previews). */
-export function renderTicketsHtml(tickets: Ticket[], color: boolean): HTMLElement {
-  const doc = el("div", "pr-doc");
-  doc.dataset.theme = color ? "print" : "print-bw";
+export function renderTicketsHtml(tickets: Ticket[], config: ClassicConfig | boolean): HTMLElement {
+  const cfg = toConfig(config);
+  const doc = el("div", `pr-doc${cfg.layout === 2 ? " pr-two-col" : ""}`);
+  doc.dataset.theme = cfg.color ? "print" : "print-bw";
+  doc.style.fontSize = `${cfg.fontSize}pt`;
+  doc.style.padding = `${cfg.marginY}vh ${cfg.marginX}%`;
   for (const t of tickets) {
     const card = el("section", "pr-ticket");
     if (t.breadcrumb && t.breadcrumb.length) card.appendChild(el("div", "pr-crumb", t.breadcrumb.join(" / ")));
@@ -55,10 +64,11 @@ function printRoot(): HTMLElement {
  * after printing; it is hidden on screen so leaving it in place is harmless if
  * the webview never fires `afterprint`.
  */
-export async function printClassic(tickets: Ticket[], color: boolean): Promise<void> {
+export async function printClassic(tickets: Ticket[], config: ClassicConfig | boolean): Promise<void> {
+  const cfg = toConfig(config);
   const root = printRoot();
-  root.replaceChildren(renderTicketsHtml(tickets, color));
-  root.dataset.theme = color ? "print" : "print-bw";
+  root.replaceChildren(renderTicketsHtml(tickets, cfg));
+  root.dataset.theme = cfg.color ? "print" : "print-bw";
   const cleanup = () => {
     root.replaceChildren();
     window.removeEventListener("afterprint", cleanup);

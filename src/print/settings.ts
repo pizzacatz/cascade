@@ -75,9 +75,19 @@ export interface MqttConfig {
   image: ImageOptions;
 }
 
+/** System Print layout options. Margins are percentages of the page. */
+export interface ClassicConfig {
+  color: boolean;
+  layout: 1 | 2;
+  /** Base font size in points. */
+  fontSize: number;
+  marginX: number;
+  marginY: number;
+}
+
 export interface PrintingConfig {
   mode: PrintMode;
-  classic: { color: boolean };
+  classic: ClassicConfig;
   receipt: ReceiptConfig;
   lp: LpConfig;
   bluetooth: BluetoothConfig;
@@ -109,6 +119,10 @@ export function defaultImageOptions(): ImageOptions {
   };
 }
 
+export function defaultClassicConfig(): ClassicConfig {
+  return { color: true, layout: 1, fontSize: 11, marginX: 4, marginY: 4 };
+}
+
 export function defaultAdvancedOptions(): AdvancedOptions {
   return { enabled: false, language: "esc-pos", columns: 48, feedBeforeCut: 4, newline: "\n", imageMode: "column" };
 }
@@ -122,7 +136,7 @@ export function defaultPrintSettings(): PrintSettings {
     hidePrintButtons: false,
     printing: {
       mode: "classic",
-      classic: { color: true },
+      classic: defaultClassicConfig(),
       receipt: {
         printerId: "",
         printType: "direct",
@@ -229,7 +243,13 @@ export function normalizePrintSettings(raw: unknown): PrintSettings {
     hidePrintButtons: bool(r.hidePrintButtons, d.hidePrintButtons),
     printing: {
       mode: oneOf(p.mode, PRINT_MODES, d.printing.mode),
-      classic: { color: bool(classic.color, d.printing.classic.color) },
+      classic: {
+        color: bool(classic.color, d.printing.classic.color),
+        layout: oneOf(typeof classic.layout === "string" ? Number(classic.layout) : classic.layout, [1, 2] as const, 1),
+        fontSize: num(classic.fontSize, d.printing.classic.fontSize, 7, 24),
+        marginX: num(classic.marginX, d.printing.classic.marginX, 0, 25),
+        marginY: num(classic.marginY, d.printing.classic.marginY, 0, 25),
+      },
       receipt: {
         printerId: str(receipt.printerId, ""),
         printType: oneOf(receipt.printType, ["direct", "image"] as const, "direct"),
@@ -309,3 +329,43 @@ export const PRINT_OPTION_LABELS: Record<PrintOption, string> = {
   selection_tickets: "One ticket per selected item",
   selection_tickets_recursive: "One ticket per selected item, with nested items",
 };
+
+export const PRINT_OPTION_DESCRIPTIONS: Record<PrintOption, string> = {
+  task_tickets: "Each task directly in the scope gets its own ticket.\nFolders are skipped.",
+  task_tickets_recursive: "Each task gets its own ticket,\nincluding tasks inside nested folders.",
+  selection_tickets: "One ticket per selected item (or the whole column),\nlisting its direct contents.",
+  selection_tickets_recursive: "One ticket per selected item (or the whole column),\nwith everything nested inside.",
+};
+
+/** Ticket options that make sense for a mode: task tickets are for receipt printers only. */
+export function printOptionsFor(mode: PrintMode): readonly PrintOption[] {
+  return mode === "classic" ? (["selection_tickets", "selection_tickets_recursive"] as const) : PRINT_OPTIONS;
+}
+
+/** The ticket option actually used: System Print maps task tickets to their selection equivalent. */
+export function effectivePrintOption(settings: PrintSettings): PrintOption {
+  const o = settings.printOption;
+  if (settings.printing.mode !== "classic") return o;
+  if (o === "task_tickets") return "selection_tickets";
+  if (o === "task_tickets_recursive") return "selection_tickets_recursive";
+  return o;
+}
+
+/** Why the active mode can't print yet (missing printer, broker…), or null when ready. */
+export function printSettingsProblem(settings: PrintSettings): string | null {
+  const p = settings.printing;
+  switch (p.mode) {
+    case "receipt_printer":
+      return p.receipt.printerId ? null : "Choose a USB receipt printer in Print Settings.";
+    case "lp_printer":
+      return p.lp.printerId ? null : "Choose a CUPS printer in Print Settings.";
+    case "bluetooth_printer":
+      return p.bluetooth.deviceId ? null : "Connect a Bluetooth printer in Print Settings.";
+    case "mqtt":
+      if (!p.mqtt.brokerUrl.trim()) return "Set the MQTT broker URL in Print Settings.";
+      if (!p.mqtt.topic.trim()) return "Set the MQTT topic in Print Settings.";
+      return null;
+    default:
+      return null;
+  }
+}

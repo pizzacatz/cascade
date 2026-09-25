@@ -104,7 +104,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  width: min(720px, 100%);
+  width: 100%;
   max-height: min(86vh, 900px);
   background: var(--surface);
   color: var(--text);
@@ -172,4 +172,238 @@
 
 .pr-dialog-footer {
   justify-content: flex-end;
+}
+
+.pr-dialog-body {
+  display: flex;
+  gap: 14px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.pr-dialog-side {
+  flex: 0 0 250px;
+  gap: 14px;
+  overflow-y: auto;
+}
+.pr-dialog-body .pr-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .pr-dialog-body {
+    flex-direction: column;
+  }
+  .pr-dialog-side {
+    flex-basis: auto;
+  }
+}
+
+.pr-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.pr-option.is-active {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+.pr-option input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+.pr-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pr-option-desc {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+  white-space: pre-line;
+}
+
+.pr-checks {
+  gap: 8px;
+}
+.pr-check {
+  font-size: 13px;
+}
+
+.pr-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.pr-notices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pr-warning {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.pr-warning::before {
+  content: "⚠ ";
+}
+
+.pr-failure {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.pr-failure-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--danger);
+}
+.pr-failure-details summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  list-style: none;
+}
+.pr-failure-details summary::-webkit-details-marker {
+  display: none;
+}
+.pr-failure-details[open] .pr-chevron {
+  transform: rotate(90deg);
+}
+.pr-failure-pre {
+  max-height: 140px;
+  overflow: auto;
+  margin: 6px 0;
+  padding: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  user-select: text;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+}
+.pr-failure-actions {
+  justify-content: flex-end;
+}
+
+/* Cut marks between image tickets. */
+.pr-cut {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 280px;
+  max-width: 100%;
+  color: var(--text-muted);
+}
+.pr-cut::after {
+  content: "";
+  flex: 1;
+  border-top: 1px dashed var(--text-muted);
+}
+
+/* Settings panel: vertical tabs. */
+.pr-settings-tabs {
+  display: flex;
+  gap: 18px;
+  min-height: 100%;
+}
+.pr-vtabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 0 0 170px;
+  border-right: 1px solid var(--border);
+  padding-right: 10px;
+}
+.pr-vtab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.pr-vtab:hover {
+  background: var(--surface-2);
+}
+.pr-vtab.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.pr-vtab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.8;
+}
+.pr-settings-pane {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .pr-settings-tabs {
+    flex-direction: column;
+  }
+  .pr-vtabs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex-basis: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 0 8px;
+  }
+}
+
+.pr-image-with-preview {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.pr-image-with-preview > :first-child {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.pr-sample {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: sticky;
+  top: 0;
+}
+.pr-sample img {
+  width: 200px;
+  max-width: 100%;
+  image-rendering: pixelated;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
 }

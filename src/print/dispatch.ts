@@ -58,7 +58,7 @@ export async function printTickets(
 
   switch (p.mode) {
     case "classic":
-      await printClassic(tickets, p.classic.color);
+      await printClassic(tickets, p.classic);
       break;
 
     case "receipt_printer": {

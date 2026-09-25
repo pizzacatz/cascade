@@ -1,6 +1,8 @@
 // Glue between the app state and the print subsystem.
 
 import { buildTickets, type Ticket } from "../print/tickets";
+import { effectivePrintOption } from "../print/settings";
+import { capTickets } from "../print/limits";
 import { printTickets } from "../print/dispatch";
 import { defaultPrintBackend } from "../print/backend";
 import { get, set, toast, type PrintScopeRef } from "./store";
@@ -12,8 +14,9 @@ import { openOverlay } from "./overlays";
 export function ticketsFor(scope: PrintScopeRef): Ticket[] {
   const s = get();
   const ps = s.printSettings;
+  // System Print only supports the selection-ticket options; long output is capped.
   return buildTickets(indexOf(s.doc), scope, {
-    printOption: ps.printOption,
+    printOption: effectivePrintOption(ps),
     printBreadcrumb: ps.printBreadcrumb,
     printFinishedTasks: ps.printFinishedTasks,
   });
@@ -43,7 +46,7 @@ export function openPrint(scope: PrintScopeRef | null = currentPrintScope()): vo
 
 export async function runPrint(scope: PrintScopeRef): Promise<{ printed: number; tickets: Ticket[] }> {
   const s = get();
-  const tickets = ticketsFor(scope);
+  const tickets = capTickets(ticketsFor(scope)).tickets;
   if (!tickets.length) throw new Error("Nothing to print — no matching tasks in this scope.");
   const res = await printTickets(tickets, s.printSettings, defaultPrintBackend());
   if (s.printSettings.printMarkAsFinished) {
