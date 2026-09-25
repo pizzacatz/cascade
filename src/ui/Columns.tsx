@@ -64,7 +64,15 @@ export function ColumnsView() {
 
   return (
     <section className={`columns-view ${focused ? "is-focused" : ""}`} aria-label="Columns" onWheel={onWheel}>
-      <div className="columns-viewport" ref={ref}>
+      <div
+        className="columns-viewport"
+        ref={ref}
+        // Columns are positioned by columnOffset; never let scrollIntoView()
+        // shift the clipped viewport sideways.
+        onScroll={(e) => {
+          if (e.currentTarget.scrollLeft) e.currentTarget.scrollLeft = 0;
+        }}
+      >
         <div className="columns-strip" style={{ transform: `translateX(${-eff * colWidth}px)` }}>
           {cols.map((id, i) => (
             <ColumnOrConvert key={id} columnId={id} openChildId={cols[i + 1]} width={colWidth} />

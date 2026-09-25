@@ -6,7 +6,11 @@ export function fuzzyScore(query: string, text: string): number | null {
   if (!q) return 0;
   const t = text.toLowerCase();
   const direct = t.indexOf(q);
-  if (direct >= 0) return 1000 - direct * 2 - (t.length - q.length) * 0.1 + (direct === 0 || /\W/.test(t[direct - 1]) ? 200 : 0);
+  if (direct >= 0) {
+    // A match at the start of any word counts like a match at the start.
+    if (direct === 0 || /\W/.test(t[direct - 1])) return 1200 - (t.length - q.length) * 0.1;
+    return 1000 - direct * 2 - (t.length - q.length) * 0.1;
+  }
   let score = 0;
   let ti = 0;
   let prev = -2;
@@ -68,6 +72,21 @@ export function parseDatePhrase(q: string, today: string, weekStartsOn: "monday"
     const wd = new Date(y, mo - 1, d).getDay();
     return add(((idx - wd + 7) % 7) || 7);
   }
+  // "dec 5", "december 5", "5 dec" — this year, or next year if already past.
+  const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  m = /^([a-z]{3,9})\.?\s+(\d{1,2})$/.exec(s) ?? null;
+  const m2 = /^(\d{1,2})\s+([a-z]{3,9})\.?$/.exec(s);
+  const monthWord = m ? m[1] : m2 ? m2[2] : null;
+  const dayNum = m ? m[2] : m2 ? m2[1] : null;
+  if (monthWord && dayNum) {
+    const mi = months.findIndex((x) => monthWord.startsWith(x));
+    if (mi >= 0) {
+      let year = Number(today.slice(0, 4));
+      const key = (y: number) => `${y}-${String(mi + 1).padStart(2, "0")}-${dayNum.padStart(2, "0")}`;
+      if (key(year) < today) year++;
+      return key(year);
+    }
+  }
   // Month/day like "10/3" or "3.10" is ambiguous; accept M/D in the current year.
   m = /^(\d{1,2})\/(\d{1,2})$/.exec(s);
   if (m) {
@@ -75,4 +94,23 @@ export function parseDatePhrase(q: string, today: string, weekStartsOn: "monday"
     return `${year}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
   }
   return null;
+}
+
+/** Character positions of a fuzzy match (for highlighting), or null. */
+export function matchPositions(query: string, text: string): number[] | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const t = text.toLowerCase();
+  const direct = t.indexOf(q);
+  if (direct >= 0) return Array.from({ length: q.length }, (_, i) => direct + i);
+  const out: number[] = [];
+  let ti = 0;
+  for (const ch of q) {
+    if (ch === " ") continue;
+    const found = t.indexOf(ch, ti);
+    if (found < 0) return null;
+    out.push(found);
+    ti = found + 1;
+  }
+  return out;
 }

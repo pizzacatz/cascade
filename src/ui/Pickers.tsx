@@ -26,7 +26,7 @@ export function ColorPicker({ value, onChange, allowDefault = true }: { value: s
 
 export function IconPicker({ value, onChange }: { value: string | null | undefined; onChange: (name: string) => void }) {
   const [q, setQ] = useState("");
-  const list = fuzzyFilter(ICON_NAMES, q, iconKeywords);
+  const list = fuzzyFilter(ICON_NAMES, q, iconKeywords).slice(0, 160);
   return (
     <div className="icon-picker">
       <input className="input" placeholder="Search icons…" value={q} onChange={(e) => setQ(e.target.value)} />

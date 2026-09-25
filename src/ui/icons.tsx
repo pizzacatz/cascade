@@ -135,19 +135,30 @@ const CATALOG: Record<string, [LucideIcon, string]> = {
   progression: [L.CircleDashed, "progress"],
 };
 
-export const ICON_NAMES = Object.keys(CATALOG).filter((n) => n !== "progression");
+/** Every Lucide icon, by kebab-case name ("calendar-check", "arrow-up-right"…). */
+const kebab = (pascal: string) => pascal.replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/([A-Z])([A-Z][a-z])/g, "$1-$2").toLowerCase();
+const LUCIDE: Record<string, LucideIcon> = Object.fromEntries(Object.entries(L.icons).map(([name, C]) => [kebab(name), C as LucideIcon]));
+
+/** Curated names first (common Font Awesome-style names found in documents), then the full catalog. */
+export const ICON_NAMES = [
+  ...Object.keys(CATALOG).filter((n) => n !== "progression"),
+  ...Object.keys(LUCIDE).filter((n) => !(n in CATALOG)),
+];
 
 export function iconKeywords(name: string): string {
-  return `${name} ${CATALOG[name]?.[1] ?? ""}`;
+  return `${name.replace(/-/g, " ")} ${CATALOG[name]?.[1] ?? ""}`;
+}
+
+export function isKnownIcon(name: string | null | undefined): boolean {
+  return !name || name === "progression" || name in CATALOG || name in LUCIDE || name.replace(/^fa-/, "") in CATALOG;
 }
 
 export function resolveIcon(name: string | null | undefined, fallback: LucideIcon = L.Folder): LucideIcon {
   if (!name) return fallback;
-  return CATALOG[name]?.[0] ?? CATALOG[name.replace(/^fa-/, "")]?.[0] ?? fallback;
+  return CATALOG[name]?.[0] ?? LUCIDE[name] ?? CATALOG[name.replace(/^fa-/, "")]?.[0] ?? LUCIDE[name.replace(/^fa-/, "")] ?? fallback;
 }
 
 export function Icon({ name, fallback, ...props }: { name: string | null | undefined; fallback?: LucideIcon } & Omit<LucideProps, "name">) {
   const C = resolveIcon(name, fallback);
   return <C size={16} strokeWidth={1.8} aria-hidden {...props} />;
 }
-
