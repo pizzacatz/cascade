@@ -8,6 +8,6 @@ export default defineConfig({
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   envPrefix: ["VITE_", "TAURI_ENV_"],
-  build: { target: "es2022", sourcemap: false },
+  build: { target: "es2022", sourcemap: false, chunkSizeWarningLimit: 1500 },
   test: { environment: "node", include: ["tests/**/*.test.ts"] },
 });

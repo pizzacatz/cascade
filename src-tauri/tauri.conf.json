@@ -1,0 +1,83 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Cascade",
+  "mainBinaryName": "cascade",
+  "version": "0.1.0",
+  "identifier": "io.github.pizzacatz.cascade",
+  "build": {
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Cascade",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 640,
+        "minHeight": 480,
+        "resizable": true,
+        "center": true,
+        "visible": false,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "fs": {
+      "requireLiteralLeadingDot": false
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "rpm", "appimage"],
+    "category": "Productivity",
+    "publisher": "Cascade contributors",
+    "copyright": "Copyright (c) 2026 Cascade contributors. MIT License.",
+    "license": "MIT",
+    "shortDescription": "Horizontal, column-based nested to-do list",
+    "longDescription": "Cascade is an open-source, local-first to-do list that lays out nested folders and tasks as horizontally scrolling columns, with a calendar view, recurring tasks, and receipt printing.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["col"],
+        "name": "Cascade Document",
+        "description": "Cascade to-do list document",
+        "mimeType": "application/x-cascade",
+        "role": "Editor"
+      }
+    ],
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0", "libdbus-1-3", "ca-certificates"],
+        "recommends": ["bluez", "cups-client"],
+        "desktopTemplate": "../packaging/linux/cascade.desktop",
+        "files": {
+          "/usr/share/mime/packages/io.github.pizzacatz.cascade.xml": "../packaging/linux/io.github.pizzacatz.cascade.xml"
+        }
+      },
+      "rpm": {
+        "depends": ["webkit2gtk4.1", "gtk3", "dbus-libs", "ca-certificates"],
+        "recommends": ["bluez", "cups-client"],
+        "desktopTemplate": "../packaging/linux/cascade.desktop",
+        "files": {
+          "/usr/share/mime/packages/io.github.pizzacatz.cascade.xml": "../packaging/linux/io.github.pizzacatz.cascade.xml"
+        }
+      }
+    }
+  }
+}

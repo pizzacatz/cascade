@@ -1,0 +1,108 @@
+/* System Print output. The #print-root element is hidden on screen and is the
+   only thing visible when printing. Theme colours come from the app's
+   [data-theme="print"] / [data-theme="print-bw"] tokens, with fallbacks. */
+
+#print-root {
+  display: none;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+  body > *:not(#print-root) {
+    display: none !important;
+  }
+  #print-root {
+    display: block !important;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
+
+.pr-doc {
+  font-family: var(--font-sans, system-ui, sans-serif);
+  color: var(--text, #111);
+  background: #fff;
+  font-size: 11pt;
+  line-height: 1.4;
+}
+
+.pr-ticket {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  padding: 10pt 0;
+  border-bottom: 1px dashed #9a9a9a;
+}
+.pr-ticket:last-child {
+  border-bottom: none;
+}
+
+.pr-crumb {
+  font-size: 8.5pt;
+  color: var(--text-muted, #555);
+  margin-bottom: 3pt;
+}
+
+.pr-title {
+  font-size: 14pt;
+  font-weight: 700;
+  padding-bottom: 3pt;
+  margin-bottom: 5pt;
+  border-bottom: 1.5pt solid currentColor;
+}
+
+.pr-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 6pt;
+  padding: 1.5pt 0;
+}
+
+.pr-box {
+  flex: none;
+  width: 9pt;
+  height: 9pt;
+  margin-top: 3pt;
+  border: 1.2pt solid currentColor;
+  border-radius: 1.5pt;
+  position: relative;
+}
+.pr-box.pr-checked::after {
+  content: "";
+  position: absolute;
+  left: 2.2pt;
+  top: 0.2pt;
+  width: 2.5pt;
+  height: 5pt;
+  border: solid currentColor;
+  border-width: 0 1.2pt 1.2pt 0;
+  transform: rotate(45deg);
+}
+
+.pr-finished .pr-text {
+  text-decoration: line-through;
+  color: var(--text-muted, #666);
+}
+
+.pr-heading .pr-text {
+  font-size: 12pt;
+  font-weight: 700;
+  margin-top: 4pt;
+}
+
+.pr-folder .pr-text {
+  font-weight: 600;
+}
+
+.pr-separator {
+  border-top: 1pt solid #9a9a9a;
+  margin: 5pt 0;
+}
+
+[data-theme="print-bw"].pr-doc,
+[data-theme="print-bw"] .pr-doc {
+  color: #000;
+}

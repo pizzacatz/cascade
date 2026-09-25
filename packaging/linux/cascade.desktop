@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name={{name}}
+GenericName=To-do List
+Comment=Horizontal, column-based nested to-do list
+Exec={{exec}} %F
+Icon={{icon}}
+Terminal=false
+Categories={{categories}}
+Keywords=todo;tasks;outliner;columns;checklist;
+StartupWMClass={{exec}}
+StartupNotify=true
+{{#if mime_type}}
+MimeType={{mime_type}}
+{{/if}}
