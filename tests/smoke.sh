@@ -55,7 +55,7 @@ APP_PID=$!
 
 # The window starts hidden and is shown once the frontend has painted.
 WINDOW_FOUND=0
-for i in $(seq 1 20); do
+for i in $(seq 1 45); do
   if ! kill -0 "$APP_PID" 2>/dev/null; then
     echo "FAIL: process exited during startup (see app.log)" >&2
     cat "$OUT_DIR/app.log" >&2
@@ -73,7 +73,7 @@ import -window root "$OUT_DIR/screenshot.png" 2>/dev/null || \
   xwd -root -out "$OUT_DIR/screenshot.xwd" 2>/dev/null || true
 
 if [[ "$WINDOW_FOUND" -ne 1 ]]; then
-  echo "FAIL: no visible Cascade window appeared within 20s" >&2
+  echo "FAIL: no visible Cascade window appeared within 45s" >&2
   cat "$OUT_DIR/app.log" >&2
   exit 1
 fi

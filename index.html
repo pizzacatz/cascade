@@ -6,6 +6,28 @@
     <link rel="icon" type="image/png" href="/icon.png" />
     <title>Cascade</title>
     <script>
+      // In the desktop app, forward frontend errors and warnings to the Rust
+      // log (stdout and the app log file) so problems are diagnosable.
+      (function () {
+        var t = window.__TAURI_INTERNALS__;
+        if (!t) return;
+        function send(level, args) {
+          try {
+            var msg = Array.prototype.map
+              .call(args, function (a) {
+                return a instanceof Error ? a.message + "\n" + a.stack : typeof a === "string" ? a : JSON.stringify(a);
+              })
+              .join(" ");
+            t.invoke("plugin:log|log", { level: level, message: "[webview] " + msg, location: null, file: null, line: null, keyValues: null });
+          } catch (e) {}
+        }
+        var err = console.error, warn = console.warn;
+        console.error = function () { send(5, arguments); err.apply(console, arguments); };
+        console.warn = function () { send(4, arguments); warn.apply(console, arguments); };
+        window.addEventListener("error", function (e) { send(5, [e.message + " @ " + e.filename + ":" + e.lineno]); });
+        window.addEventListener("unhandledrejection", function (e) { send(5, ["Unhandled rejection:", e.reason]); });
+        send(3, ["page loaded"]);
+      })();
       // Paint the right theme before the app loads to avoid a flash.
       (function () {
         try {

@@ -169,8 +169,19 @@ export function keyLabel(idOrKeys: string): string {
     .join("+");
 }
 
+/** Punctuation is matched by physical key so Shift doesn't change it (Shift+, is "<"). */
+const CODE_KEYS: Record<string, string> = {
+  Comma: "comma",
+  Period: "period",
+  Slash: "slash",
+  Minus: "minus",
+  Equal: "equal",
+  BracketLeft: "bracketleft",
+  BracketRight: "bracketright",
+};
+
 export function comboFromEvent(e: KeyboardEvent): string {
-  let key = e.key.toLowerCase();
+  let key = CODE_KEYS[e.code] ?? e.key.toLowerCase();
   if (key === " ") key = "space";
   else if (key === ",") key = "comma";
   else if (key === "esc") key = "escape";
