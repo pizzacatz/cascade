@@ -135,7 +135,6 @@
   border-bottom: 1px solid var(--border);
 }
 .filter-chip {
-  --c: var(--text-muted);
   height: 24px;
   padding: 0 9px;
   border-radius: 12px;
