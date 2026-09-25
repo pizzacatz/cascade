@@ -19,7 +19,7 @@ import { openOverlay } from "../state/overlays";
 import { Icon } from "./icons";
 import { ItemEditor } from "./ItemEditor";
 import { justDropped, startItemDrag } from "./dnd";
-import { ProgressRing } from "./ProgressRing";
+import { ProgressPie, usesProgressPie } from "./ProgressRing";
 
 interface Props {
   item: Item;
@@ -42,7 +42,6 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
   const tags = useApp((s) => s.doc?.config.tags);
   const stats = useApp((s) => (isContainerType(item.type) ? statsOf(s.doc).get(item.id) : undefined));
   const childCount = useApp((s) => (isContainerType(item.type) ? indexOf(s.doc).children.get(item.id)?.length ?? 0 : 0));
-  const progressBar = useApp((s) => s.prefs.columnsProgressBar !== "hide");
   const dropHint = useApp((s) => {
     const t = s.drag?.status === "active" ? s.drag.target : null;
     if (!t || !("itemId" in t) || t.itemId !== item.id) return null;
@@ -159,8 +158,8 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
       )}
       {isContainerType(item.type) && (
         <span className={`item-icon ${style.accentColor ? "has-color" : ""}`}>
-          {item.icon === "progression" ? (
-            <ProgressRing value={progress} size={16} />
+          {usesProgressPie(item.type, item.icon) ? (
+            <ProgressPie value={progress} size={16} />
           ) : (
             <Icon name={item.icon} fallback={undefined} size={16} />
           )}
@@ -186,11 +185,6 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
         )}
         {isContainerType(item.type) && (
           <>
-            {progressBar && progress >= 0 && item.icon !== "progression" && stats && stats.totalTaskCount > 0 && (
-              <span className="progress-mini" title={`${Math.round(progress * 100)}% done`}>
-                <ProgressRing value={progress} size={14} />
-              </span>
-            )}
             {childCount > 0 && <span className="child-count">{childCount}</span>}
             <ChevronRight size={14} className="chevron" />
           </>

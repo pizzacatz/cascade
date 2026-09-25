@@ -11,7 +11,7 @@ import { addItem, emptyTrash } from "../state/items";
 import { confirmAction, openOverlay } from "../state/overlays";
 import { Icon } from "./icons";
 import { ItemRow } from "./ItemRow";
-import { ProgressRing } from "./ProgressRing";
+import { ProgressPie, ProgressRing, usesProgressPie } from "./ProgressRing";
 
 export function ColumnsView() {
   const ref = useRef<HTMLDivElement>(null);
@@ -125,12 +125,16 @@ function Column({ columnId, openChildId, width }: { columnId: string; openChildI
           }}
         >
           <span className="column-icon">
-            <Icon name={icon} size={15} />
+            {folder && usesProgressPie(folder.type, folder.icon) ? (
+              <ProgressPie value={Math.max(0, progress)} size={15} />
+            ) : (
+              <Icon name={icon} size={15} />
+            )}
           </span>
           <span className="column-title">{title}</span>
           {progress >= 0 && (
             <span className="column-progress" title={`${Math.round(progress * 100)}% done`}>
-              <ProgressRing value={progress} size={14} />
+              {!(folder && usesProgressPie(folder.type, folder.icon)) && <ProgressRing value={progress} size={14} />}
               <span>{Math.round(progress * 100)}%</span>
             </span>
           )}

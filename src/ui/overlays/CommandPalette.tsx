@@ -77,6 +77,7 @@ import { keyLabel } from "../../state/shortcuts";
 import { DOC_TEMPLATES } from "../../state/templates";
 import { platform, displayName } from "../../platform";
 import { ICON_NAMES, Icon, iconKeywords } from "../icons";
+import { ProgressPie } from "../ProgressRing";
 import { fuzzyFilter, parseDatePhrase } from "../fuzzy";
 import { SORTS } from "./ContextMenu";
 import { promptText } from "../../state/overlays";
@@ -286,7 +287,7 @@ function tagItems(s: AppState, query: string): PItem[] {
 function iconItems(s: AppState): PItem[] {
   const sel = selectionOf(s);
   return [
-    { id: "icon-progression", label: "Progress ring", icon: <Icon name="progression" size={15} />, keywords: "progression progress", run: () => setIcon("progression", sel) },
+    { id: "icon-default", label: "Progress circle (default)", icon: <ProgressPie value={0.6} size={15} />, keywords: "progression progress default circle reset", run: () => setIcon(null, sel) },
     ...ICON_NAMES.map((n) => ({ id: `icon-${n}`, label: n.replace(/-/g, " "), icon: <Icon name={n} size={15} />, keywords: iconKeywords(n), run: () => setIcon(n, sel) })),
   ];
 }

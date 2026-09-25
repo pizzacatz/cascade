@@ -476,6 +476,17 @@
 [class*=" c-"] .progress-ring-value {
   stroke: var(--c, var(--accent));
 }
+.progress-pie-outline {
+  stroke: currentColor;
+  opacity: 0.55;
+}
+.progress-pie-fill {
+  fill: var(--c, var(--accent));
+}
+.progress-pie.is-done .progress-pie-outline {
+  stroke: var(--c, var(--accent));
+  opacity: 1;
+}
 .progress-ring-value.is-done {
   stroke: var(--success);
 }

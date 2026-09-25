@@ -37,7 +37,8 @@ function addNodes(doc: Doc, parentId: string, nodes: Node[]) {
       tags: n.tags ?? [],
       finished: !!n.done,
       finishedAt: n.done ? new Date().toISOString() : null,
-      ...(n.icon ? { icon: n.icon } : {}),
+      // Folders keep the default progress-circle icon; only templates get custom icons.
+      ...(n.icon && n.t !== "folder" ? { icon: n.icon } : {}),
     });
     doc.items[it.id] = it;
     if (n.children) addNodes(doc, it.id, n.children);
