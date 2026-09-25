@@ -4,6 +4,7 @@
 
 import { get, set, type CommandPageId, type Overlay } from "./store";
 import { exitEdit } from "./items";
+import { enterEdit, selectCalendarItem, selectColumnItem } from "./nav";
 
 export function openOverlay(overlay: Overlay, opts: { stack?: boolean } = {}): void {
   const s = get();
@@ -15,11 +16,23 @@ export function openOverlay(overlay: Overlay, opts: { stack?: boolean } = {}): v
   }));
 }
 
+/** Return to editing an item after the "::" command palette closes. */
+export function resumeInlineEdit(resume: { itemId: string; caret: number } | undefined): void {
+  const s = get();
+  if (!resume || s.overlay || s.edit) return;
+  const it = s.doc?.items[resume.itemId];
+  if (!it || it.type === "separator") return;
+  (s.view.focusedView === "calendar" && it.scheduleDate ? selectCalendarItem : it.parentId ? selectColumnItem : selectCalendarItem)(it.id);
+  enterEdit(it.id, Math.min(resume.caret, it.text.length));
+}
+
 export function closeOverlay(): void {
+  const closing = get().overlay;
   set((st) => {
     const parent = st.overlayStack[st.overlayStack.length - 1] ?? null;
     return { overlay: parent, overlayStack: st.overlayStack.slice(0, -1) };
   });
+  if (closing?.kind === "command") resumeInlineEdit(closing.resume);
 }
 
 export function closeAllOverlays(): void {

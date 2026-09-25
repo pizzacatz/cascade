@@ -16,9 +16,18 @@ export function DragGhost() {
     label = drag.ids.length > 1 ? `${drag.ids.length} items` : first?.text || "Item";
   }
   const cls = drag.palette?.kind === "color" && drag.palette.color !== "default" ? `c-${drag.palette.color}` : "";
+  if (!drag.palette) {
+    // A faded copy of the grabbed row, with a count badge for several items.
+    return (
+      <div className={`drag-ghost is-row ${drag.target ? "" : "is-invalid"}`} style={{ left: drag.x + 12, top: drag.y + 8 }}>
+        {drag.copy && <Copy size={12} />}
+        <span className="ellipsis">{first?.text || "Item"}</span>
+        {drag.ids.length > 1 && <span className="drag-count">{drag.ids.length}</span>}
+      </div>
+    );
+  }
   return (
     <div className={`drag-ghost ${cls} ${drag.target ? "" : "is-invalid"}`} style={{ left: drag.x + 14, top: drag.y + 10 }}>
-      {drag.copy && <Copy size={12} />}
       <span>{label}</span>
     </div>
   );

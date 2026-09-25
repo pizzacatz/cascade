@@ -2,7 +2,6 @@ import { useApp } from "../../state/store";
 import { CommandPalette } from "./CommandPalette";
 import { ContextMenu } from "./ContextMenu";
 import { ConfirmDialog, PromptDialog } from "./Dialogs";
-import { InlineMenu } from "./InlineMenu";
 import { AppSettings } from "./AppSettings";
 import { DocSettings } from "./DocSettings";
 import { PrintOverlay, PrintSettingsOverlay } from "./PrintOverlays";
@@ -13,15 +12,13 @@ export function OverlayHost() {
   if (!o) return null;
   switch (o.kind) {
     case "command":
-      return <CommandPalette pages={o.pages} />;
+      return <CommandPalette pages={o.pages} resume={o.resume} />;
     case "context":
       return <ContextMenu x={o.x} y={o.y} target={o.target} />;
     case "confirm":
       return <ConfirmDialog {...o} />;
     case "prompt":
       return <PromptDialog {...o} />;
-    case "inline":
-      return <InlineMenu itemId={o.itemId} x={o.x} y={o.y} />;
     case "appSettings":
       return <AppSettings tab={o.tab} />;
     case "docSettings":

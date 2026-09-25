@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Check, ChevronRight, CalendarDays } from "lucide-react";
+import { Check, ChevronRight, CalendarDays, Columns3, Tags as TagsIcon } from "lucide-react";
 import type { Item, ViewName } from "../model/types";
 import { isContainerType } from "../model/types";
 import { formatShortDay, relativeDayLabel } from "../model/dates";
@@ -7,6 +7,7 @@ import { useApp, get } from "../state/store";
 import { statsOf, styleFor, today, indexOf } from "../state/derived";
 import {
   enterEdit,
+  focusView,
   extendCalendarSelectionTo,
   extendColumnSelectionTo,
   selectCalendarItem,
@@ -50,9 +51,20 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
   });
   const dragging = useApp((s) => s.drag?.status === "active" && !s.drag.copy && s.drag.ids.includes(item.id));
   const previewAfter = useApp((s) => s.createPreview?.afterId === item.id);
+  const deletePreview = useApp((s) => !!s.deletePreview?.includes(item.id));
 
   const onMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 || editing) return;
+    // While another item is being edited, a plain click moves editing here,
+    // with the caret where you clicked.
+    const editingOther = get().edit;
+    if (editingOther && item.type !== "separator" && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      e.preventDefault();
+      const caret = caretOffsetAt(e.clientX, e.clientY, e.currentTarget as HTMLElement) ?? "end";
+      (view === "calendar" ? selectCalendarItem : selectColumnItem)(item.id);
+      enterEdit(item.id, caret);
+      return;
+    }
     if (e.ctrlKey || e.metaKey) {
       (view === "calendar" ? toggleCalendarSelection : toggleColumnSelection)(item.id);
       return;
@@ -79,6 +91,7 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
   };
 
   const onContextMenu = (e: React.MouseEvent) => {
+    if (editing) return; // the editor gets the normal text menu
     e.preventDefault();
     if (!selected) (view === "calendar" ? selectCalendarItem : selectColumnItem)(item.id);
     openOverlay({ kind: "context", x: e.clientX, y: e.clientY, target: { type: "item", itemId: item.id, view } });
@@ -105,6 +118,7 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
     dragging && "is-dragging",
     dropHint && `drop-${dropHint}`,
     previewAfter && "preview-after",
+    deletePreview && "is-delete-preview",
     dropHint === "into" && !isContainerType(item.type) && "will-convert",
     colorClass(style.accentColor),
   ]
@@ -160,7 +174,7 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
         </button>
       )}
       {isContainerType(item.type) && (
-        <span className={`item-icon ${style.accentColor ? "has-color" : ""}`}>
+        <span className={`item-icon ${style.accentColor ? "has-color" : ""}`} title={progress >= 0 ? `${Math.round(progress * 100)} %` : undefined}>
           {usesProgressPie(item.type, item.icon) ? (
             <ProgressPie value={progress} size={16} />
           ) : (
@@ -176,16 +190,50 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
         </div>
       )}
       <div className="item-meta">
-        {itemTags.map((t) => (
-          <span key={t.id} className={`tag-chip ${colorClass(t.color)}`} title={t.name}>
-            <Icon name={t.icon} size={11} />
-            <span>{t.name}</span>
-          </span>
-        ))}
         {day && (
-          <span className={`date-chip ${day < today() && !item.finished ? "is-overdue" : ""}`}>
+          <button
+            className={`date-chip ${day < today() && !item.finished ? "is-overdue" : ""}`}
+            title="Open in calendar"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              focusView("calendar");
+              selectCalendarItem(item.id);
+            }}
+          >
             <CalendarDays size={11} />
             {relativeDayLabel(day, today()) ?? formatShortDay(day)}
+          </button>
+        )}
+        {view === "calendar" && item.parentId && (
+          <button
+            className="open-in-btn"
+            title="Open in columns"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              selectColumnItem(item.id);
+            }}
+          >
+            <Columns3 size={12} />
+          </button>
+        )}
+        {itemTags.length === 1 && (
+          <span className={`tag-icon ${colorClass(itemTags[0].color)}`} title={itemTags[0].name}>
+            <Icon name={itemTags[0].icon} size={13} />
+          </span>
+        )}
+        {itemTags.length > 1 && (
+          <span className="tags-stack" title={`Show all ${itemTags.length} tags`}>
+            <TagsIcon size={13} />
+            <span className="tags-pop" role="tooltip">
+              {itemTags.map((t) => (
+                <span key={t.id} className={`tags-pop-row ${colorClass(t.color)}`}>
+                  <Icon name={t.icon} size={12} />
+                  {t.name}
+                </span>
+              ))}
+            </span>
           </span>
         )}
         {isContainerType(item.type) && childCount > 0 && <span className="child-count">{childCount}</span>}
@@ -208,4 +256,16 @@ function placeholderFor(item: Item) {
     default:
       return "Untitled";
   }
+}
+
+/** Character offset in a row's text under a screen point (for placing the caret). */
+function caretOffsetAt(x: number, y: number, row: HTMLElement): number | null {
+  const text = row.querySelector(".item-text");
+  const doc = document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null };
+  const range = doc.caretRangeFromPoint?.(x, y);
+  if (!text || !range || !text.contains(range.startContainer)) return null;
+  const pre = document.createRange();
+  pre.selectNodeContents(text);
+  pre.setEnd(range.startContainer, range.startOffset);
+  return pre.toString().length;
 }

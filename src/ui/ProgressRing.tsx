@@ -43,6 +43,16 @@ export function ProgressPie({ value, size = 16 }: { value: number; size?: number
     <svg className={`progress-pie ${v >= 1 ? "is-done" : ""}`} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
       <circle cx={c} cy={c} r={r} fill="none" strokeWidth={1.5} className="progress-pie-outline" />
       {fill}
+      {v >= 1 && (
+        <path
+          d={`M ${c - inner * 0.5} ${c} L ${c - inner * 0.1} ${c + inner * 0.4} L ${c + inner * 0.55} ${c - inner * 0.4}`}
+          className="progress-pie-check"
+          fill="none"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
     </svg>
   );
 }

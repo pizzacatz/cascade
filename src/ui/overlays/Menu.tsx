@@ -13,6 +13,8 @@ export interface MenuEntry {
   separator?: boolean;
   submenu?: MenuEntry[];
   run?: () => void;
+  /** Called while hovered, e.g. to preview where a new item would go. */
+  onHover?: () => void;
 }
 
 interface Props {
@@ -23,13 +25,16 @@ interface Props {
   /** Submenus close with ArrowLeft instead of closing everything. */
   isSub?: boolean;
   onRun?: () => void;
+  onClearPreview?: () => void;
 }
 
-export function Menu({ x, y, entries, onClose, isSub, onRun }: Props) {
+export function Menu({ x, y, entries, onClose, isSub, onRun, onClearPreview }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
   const [active, setActive] = useState(() => entries.findIndex((e) => !e.separator && !e.disabled));
   const [openSub, setOpenSub] = useState<number | null>(null);
+
+  useEffect(() => () => onClearPreview?.(), [onClearPreview]);
 
   useLayoutEffect(() => {
     const el = ref.current!;
@@ -99,6 +104,10 @@ export function Menu({ x, y, entries, onClose, isSub, onRun }: Props) {
               onMouseEnter={() => {
                 setActive(i);
                 setOpenSub(e.submenu ? i : null);
+                if (!isSub) {
+                  onClearPreview?.();
+                  e.onHover?.();
+                }
               }}
               onClick={() => activate(i)}
             >

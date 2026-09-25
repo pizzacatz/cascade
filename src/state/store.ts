@@ -33,7 +33,8 @@ export interface CommandPage {
 export type ContextTarget =
   | { type: "item"; itemId: string; view: ViewName }
   | { type: "surface"; view: ViewName; parentId?: string; date?: string }
-  | { type: "space"; spaceId: string };
+  | { type: "space"; spaceId: string }
+  | { type: "app" };
 
 export type PrintScopeRef =
   | { kind: "selection"; ids: string[] }
@@ -42,7 +43,7 @@ export type PrintScopeRef =
   | { kind: "day"; date: string };
 
 export type Overlay =
-  | { kind: "command"; pages: CommandPage[] }
+  | { kind: "command"; pages: CommandPage[]; resume?: { itemId: string; caret: number } }
   | { kind: "context"; x: number; y: number; target: ContextTarget }
   | {
       kind: "confirm";
@@ -59,7 +60,6 @@ export type Overlay =
   | { kind: "print"; scope: PrintScopeRef }
   | { kind: "stack"; scope: PrintScopeRef }
   | { kind: "template"; target: { parentId: string } | { date: string } }
-  | { kind: "inline"; itemId: string; x: number; y: number; query: string }
   | { kind: "debug"; tab: "speed" | "drag" | "state" }
   | { kind: "about" };
 
@@ -78,7 +78,9 @@ export type DropTarget =
   | { kind: "into"; itemId: string }
   | { kind: "column-end"; parentId: string }
   | { kind: "day-end"; date: string }
-  | { kind: "space"; spaceId: string };
+  | { kind: "space"; spaceId: string }
+  /** Dropping dragged items onto a toolbar chip applies it (type / color / tag). */
+  | { kind: "chip"; chip: PaletteDrag };
 
 export type PaletteDrag =
   | { kind: "type"; type: "task" | "text" | "heading" | "folder" | "separator" | "template" }
@@ -154,6 +156,8 @@ export interface AppState {
   future: HistoryEntry[];
   /** Where a toolbar create button would put a new item (shown while hovering it). */
   createPreview: { afterId?: string; columnStart?: string } | null;
+  /** Items that a hovered Delete button/menu entry would remove. */
+  deletePreview: string[] | null;
   /** Patches applied since the last successful save (re-applied if the file changes on disk). */
   unsavedPatches: Patch[];
 }
@@ -185,6 +189,7 @@ export const useApp = create<AppState>(() => ({
   future: [],
   unsavedPatches: [],
   createPreview: null,
+  deletePreview: null,
 }));
 
 export const get = () => useApp.getState();

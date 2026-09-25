@@ -66,6 +66,14 @@ export function App() {
             <div className={`views ${showColumns && showCalendar ? "is-split" : ""}`}>
               {showColumns && <ColumnsView />}
               {showCalendar && <CalendarView />}
+              {!showColumns && !showCalendar && (
+                <div className="no-view">
+                  <div>
+                    <strong>No view selected</strong>
+                    Enable Columns or Calendar in the toolbar to display a view.
+                  </div>
+                </div>
+              )}
             </div>
             {!hideToolbar && <Toolbar />}
           </main>

@@ -14,6 +14,8 @@ import { indexOf, selectionOf } from "../state/derived";
 import {
   addItem,
   addTag,
+  canChangeType,
+  changeType,
   insertOutline,
   moveItemsTo,
   scheduleItems,
@@ -68,6 +70,23 @@ function computeTarget(d: DragState, x: number, y: number): DropTarget | null {
   const ix = indexOf(s.doc);
   const moving = new Set(d.ids);
 
+  // Dragging items onto a toolbar chip applies it to them.
+  const chip = el.closest<HTMLElement>("[data-chip]");
+  if (chip) {
+    if (d.palette || !d.ids.length) return null;
+    const [kind, value] = chip.dataset.chip!.split(":");
+    const c: PaletteDrag =
+      kind === "type" ? { kind: "type", type: value as ItemType & "task" } : kind === "color" ? { kind: "color", color: value } : { kind: "tag", tagId: value };
+    if (c.kind === "type" && !canChangeType(d.ids, c.type as ItemType, d.sourceView)) return null;
+    return { kind: "chip", chip: c };
+  }
+  // A date in the calendar's day picker schedules onto that day.
+  const pickerDay = el.closest<HTMLElement>("[data-day-picker]");
+  if (pickerDay) {
+    if (d.palette && d.palette.kind !== "type") return null;
+    if (d.palette?.kind === "type" && isContainerType(d.palette.type as ItemType)) return null;
+    return { kind: "day-end", date: pickerDay.dataset.dayPicker! };
+  }
   const row = el.closest<HTMLElement>("[data-item-id]");
   if (row) {
     const itemId = row.dataset.itemId!;
@@ -179,6 +198,8 @@ function placeFor(target: DropTarget, excluding: string[]): Place | null {
       return { view: "calendar", date: target.date };
     case "space":
       return { view: "columns", parentId: target.spaceId };
+    case "chip":
+      return null;
     case "before":
     case "after": {
       const it = ix.items[target.itemId];
@@ -212,6 +233,15 @@ function performDrop(d: DragState, target: DropTarget) {
       const id = addItem(p.type as ItemType, place, {}, false);
       if (id && isEditableType(p.type as ItemType)) enterEdit(id, "end");
     }
+    return;
+  }
+
+  if (target.kind === "chip") {
+    const ids = d.ids.filter((id) => ix.items[id]);
+    const c = target.chip;
+    if (c.kind === "type") changeType(c.type as ItemType, ids);
+    else if (c.kind === "color") setColor(c.color as Color, ids);
+    else addTag(c.tagId, ids);
     return;
   }
 

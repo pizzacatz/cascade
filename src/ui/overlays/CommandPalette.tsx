@@ -71,7 +71,7 @@ import {
 } from "../../state/items";
 import { copyWithToast, cutSelection } from "../../state/clipboard";
 import { closeDocument, newDocument, openDialog, openPath, clearRecentFiles, fromStoredPath } from "../../state/files";
-import { closeOverlay, openOverlay } from "../../state/overlays";
+import { closeOverlay, openOverlay, resumeInlineEdit } from "../../state/overlays";
 import { openPrint } from "../../state/printing";
 import { openStack } from "../../state/stack";
 import { createSpace, createTag, prepareDayWithToast, updateSpace } from "../../state/config";
@@ -395,7 +395,7 @@ interface SearchFilters {
   includeTrash: boolean;
 }
 
-export function CommandPalette({ pages }: { pages: { id: CommandPageId; query: string }[] }) {
+export function CommandPalette({ pages, resume }: { pages: { id: CommandPageId; query: string }[]; resume?: { itemId: string; caret: number } }) {
   const s = useApp((st) => st);
   const page = pages[pages.length - 1];
   const [query, setQuery] = useState(page.query);
@@ -454,15 +454,18 @@ export function CommandPalette({ pages }: { pages: { id: CommandPageId; query: s
   const choose = (item: PItem | undefined) => {
     if (!item) return;
     if (item.page) {
-      set({ overlay: { kind: "command", pages: [...pages.slice(0, -1), { ...page, query }, { id: item.page, query: "" }] } });
+      set({ overlay: { kind: "command", pages: [...pages.slice(0, -1), { ...page, query }, { id: item.page, query: "" }], resume } });
       return;
     }
-    closeOverlay();
+    // Run with the palette gone; then, if it was opened with "::" while
+    // editing, go back to editing (unless the command opened something else).
+    set({ overlay: null, overlayStack: [] });
     item.run?.();
+    resumeInlineEdit(resume);
   };
 
   const back = () => {
-    if (pages.length > 1) set({ overlay: { kind: "command", pages: pages.slice(0, -1) } });
+    if (pages.length > 1) set({ overlay: { kind: "command", pages: pages.slice(0, -1), resume } });
     else closeOverlay();
   };
 

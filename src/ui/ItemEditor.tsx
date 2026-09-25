@@ -8,7 +8,7 @@ import { childrenOf } from "../model/tree";
 import { get, set, useApp } from "../state/store";
 import { indexOf } from "../state/derived";
 import { enterEdit, selectColumnItem, updateDraft, selectCalendarItem } from "../state/nav";
-import { convertEditedItem, createFromEdit, createSibling, exitEdit } from "../state/items";
+import { convertEditedItem, createFromEdit, createSibling, exitEdit, flushEdit } from "../state/items";
 
 function placeCaret(el: HTMLElement, caret: "start" | "end" | number) {
   const sel = window.getSelection();
@@ -109,22 +109,17 @@ export function ItemEditor({ item, view, className }: { item: Item; view: "colum
       return;
     }
     if (cmd && text.includes(cmd)) {
+      // The inline trigger opens the full command menu for this item; editing
+      // resumes afterwards with the caret where the trigger was typed.
       const at = text.indexOf(cmd);
       const stripped = text.slice(0, at) + text.slice(at + cmd.length);
       el.textContent = stripped;
-      placeCaret(el, at);
       updateDraft(stripped);
-      const r = el.getBoundingClientRect();
-      const sel = window.getSelection();
-      const cr = sel && sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
+      flushEdit();
       set({
-        overlay: {
-          kind: "inline",
-          itemId: item.id,
-          x: cr && cr.left ? cr.left : r.left,
-          y: (cr && cr.bottom ? cr.bottom : r.bottom) + 4,
-          query: "",
-        },
+        edit: null,
+        overlay: { kind: "command", pages: [{ id: "root", query: "" }], resume: { itemId: item.id, caret: at } },
+        overlayStack: [],
       });
       return;
     }
@@ -179,7 +174,6 @@ export function ItemEditor({ item, view, className }: { item: Item; view: "colum
     // Window lost focus (alt-tab): keep editing.
     if (!document.hasFocus()) return;
     const s = get();
-    if (s.overlay?.kind === "inline") return;
     if (s.edit?.itemId === item.id) exitEdit();
   };
 
