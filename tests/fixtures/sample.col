@@ -1,0 +1,45 @@
+{
+  "file_version": 4,
+  "configuration": {
+    "recurrenceRules": [],
+    "preparedDays": [],
+    "progressionMode": "by_level",
+    "spaces": [
+      { "id": "root", "icon": "home", "color": "default", "name": "Home", "position": "a", "archived": false },
+      { "id": "trash", "icon": "trash", "color": "default", "name": "Trash", "position": "b", "archived": false }
+    ],
+    "tags": [],
+    "conditionalFormatting": [
+      {
+        "id": "fmtfinishedtasks000000001",
+        "name": "Finished tasks",
+        "enabled": true,
+        "priority": "a0",
+        "kind": "taskRule",
+        "logic": "all",
+        "conditions": [{ "kind": "finished", "value": true }],
+        "style": { "strikethrough": true, "textColor": "gray" }
+      }
+    ],
+    "viewState": {
+      "focusedView": "columns",
+      "showColumnsView": true,
+      "showCalendarView": false,
+      "showCalendarDayPicker": false,
+      "columnsSelection": ["folderlinuxport0000000001"],
+      "columnsPath": ["folderlinuxport0000000001"],
+      "calendarSelection": [],
+      "currentSpaceId": "root"
+    }
+  },
+  "items": [
+    { "id": "folderlinuxport0000000001", "t": 90, "parent_id": "root", "position": "a0", "text": "Linux Port Smoke Test", "createdAt": "2026-09-25T00:00:00.000Z", "updatedAt": "2026-09-25T00:00:00.000Z" },
+    { "id": "taskopenfile0000000000001", "t": 1, "parent_id": "folderlinuxport0000000001", "position": "a0", "text": "Open a .col file from the command line", "createdAt": "2026-09-25T00:00:01.000Z", "updatedAt": "2026-09-25T00:00:01.000Z" },
+    { "id": "taskrender000000000000001", "t": 1, "parent_id": "folderlinuxport0000000001", "position": "a1", "text": "Render columns in WebKitGTK", "finished": true, "finishedAt": "2026-09-25T00:00:05.000Z", "createdAt": "2026-09-25T00:00:02.000Z", "updatedAt": "2026-09-25T00:00:05.000Z" },
+    { "id": "foldernested0000000000001", "t": 90, "parent_id": "folderlinuxport0000000001", "position": "a2", "text": "Nested folder", "createdAt": "2026-09-25T00:00:03.000Z", "updatedAt": "2026-09-25T00:00:03.000Z" },
+    { "id": "tasknested00000000000001a", "t": 1, "parent_id": "foldernested0000000000001", "position": "a0", "text": "Nested task one", "createdAt": "2026-09-25T00:00:04.000Z", "updatedAt": "2026-09-25T00:00:04.000Z" },
+    { "id": "tasknested00000000000001b", "t": 1, "parent_id": "foldernested0000000000001", "position": "a1", "text": "Nested task two", "createdAt": "2026-09-25T00:00:04.500Z", "updatedAt": "2026-09-25T00:00:04.500Z" },
+    { "id": "foldersecond0000000000001", "t": 90, "parent_id": "root", "position": "a1", "text": "Second column", "createdAt": "2026-09-25T00:00:06.000Z", "updatedAt": "2026-09-25T00:00:06.000Z" },
+    { "id": "tasksecond00000000000001a", "t": 1, "parent_id": "foldersecond0000000000001", "position": "a0", "text": "Horizontal layout check", "createdAt": "2026-09-25T00:00:07.000Z", "updatedAt": "2026-09-25T00:00:07.000Z" }
+  ]
+}
