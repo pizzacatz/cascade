@@ -152,6 +152,8 @@ export interface AppState {
   printSettings: PrintSettings;
   past: HistoryEntry[];
   future: HistoryEntry[];
+  /** Patches applied since the last successful save (re-applied if the file changes on disk). */
+  unsavedPatches: Patch[];
 }
 
 const HISTORY_LIMIT = 300;
@@ -179,6 +181,7 @@ export const useApp = create<AppState>(() => ({
   printSettings: defaultPrintSettings(),
   past: [],
   future: [],
+  unsavedPatches: [],
 }));
 
 export const get = () => useApp.getState();
@@ -235,6 +238,7 @@ export function transact(label: string, recipe: (draft: Doc) => void, opts: Tran
     revision: s.revision + 1,
     past,
     future: opts.skipHistory ? s.future : [],
+    unsavedPatches: [...s.unsavedPatches, ...patches],
   });
   return true;
 }
@@ -252,6 +256,7 @@ export function undo(): string | null {
     past: s.past.slice(0, -1),
     future: [...s.future, entry],
     revision: s.revision + 1,
+    unsavedPatches: [...s.unsavedPatches, ...entry.inverse],
     edit: null,
     createTarget: null,
   });
@@ -268,6 +273,7 @@ export function redo(): string | null {
     future: s.future.slice(0, -1),
     past: [...s.past, entry],
     revision: s.revision + 1,
+    unsavedPatches: [...s.unsavedPatches, ...entry.patches],
     edit: null,
     createTarget: null,
   });

@@ -34,6 +34,11 @@ jobs:
       - name: Frontend tests
         run: npm test
 
+      - name: Build cascade-cli
+        run: |
+          npm run build:cli
+          node dist-cli/cascade-cli.mjs --version
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -60,6 +65,12 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/rpm/*.rpm
             src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: cascade-cli
+          path: dist-cli/cascade-cli.mjs
           if-no-files-found: error
 
   smoke:

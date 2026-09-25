@@ -150,6 +150,54 @@ running instance. Example cron entry that prepares tomorrow every evening:
 0 21 * * * cascade prepare-calendar --file ~/Documents/life.col -d 1
 ```
 
+## Scripts and LLM agents: `cascade-cli` and MCP
+
+`cascade-cli` reads and edits `.col` documents without the app — for scripts, cron jobs,
+and to-do-list agents. It uses the same document code as the app, so ordering, folders,
+Trash and tags behave exactly as in the UI, and it writes files atomically. If the document
+is open in Cascade, the app notices the change within a second and reloads it; edits you
+made in the app that were not yet saved are re-applied on top, so neither side's changes
+are lost.
+
+Build it with `npm run build:cli` (output: `dist-cli/cascade-cli.mjs`, a single file that
+needs only Node.js 22+), then e.g. `ln -s "$PWD/dist-cli/cascade-cli.mjs" ~/.local/bin/cascade-cli`.
+
+```sh
+export CASCADE_FILE=~/Documents/life.col         # or pass FILE.col as the first argument
+cascade-cli list --parent Work --depth 2
+cascade-cli add "Book flights" --parent "Home/Trip" --date tomorrow --tag travel
+cascade-cli finish "Book flights"
+cascade-cli move "Pack bags" --to "Home/Trip" --first
+cascade-cli search invoice --tag waiting --json
+cascade-cli agenda                               # today's items plus overdue tasks
+cascade-cli delete "Old idea"                    # to Trash (again: permanently)
+```
+
+Items can be referred to by id, by exact text, or by path (`"Home/Work/Launch"`); an
+ambiguous name is an error that lists the matching ids. Every command accepts `--json`.
+Exit codes: `0` ok, `1` error, `2` bad usage. Run `cascade-cli --help` for everything.
+
+### MCP server
+
+`cascade-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on
+stdio, giving agents typed tools: `list_items`, `get_item`, `search_items`, `get_agenda`,
+`list_spaces_and_tags`, `add_item`, `add_items`, `update_item`, `set_finished`,
+`move_items`, `schedule_items`, `delete_items`, `add_space`, `prepare_day`,
+`create_document`. With `--file`, tools default to that document.
+
+Claude Code:
+
+```sh
+claude mcp add cascade -- node /path/to/cascade-cli.mjs mcp --file ~/Documents/life.col
+```
+
+Other MCP clients use the same command in their server configuration:
+
+```json
+{ "mcpServers": { "cascade": { "command": "node",
+    "args": ["/path/to/cascade-cli.mjs", "mcp", "--file", "/home/me/Documents/life.col"] } } }
+```
+
 ## The `.col` file format
 
 A document is UTF-8 JSON, written with two-space indentation:

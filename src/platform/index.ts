@@ -34,6 +34,8 @@ export interface Platform {
   /** Atomic write: temp file + rename. */
   writeTextAtomic(path: string, text: string): Promise<void>;
   exists(path: string): Promise<boolean>;
+  /** Modification time (ms) and size, or null when unavailable. */
+  stat(path: string): Promise<{ mtime: number; size: number } | null>;
   writeBackup(path: string, text: string): Promise<void>;
   pruneBackups(): Promise<void>;
   // Preferences / settings stores
@@ -137,6 +139,14 @@ async function tauriPlatform(): Promise<Platform> {
       }
     },
     exists: (path) => fs.exists(path),
+    async stat(path) {
+      try {
+        const st = await fs.stat(path);
+        return { mtime: st.mtime ? new Date(st.mtime).getTime() : 0, size: st.size };
+      } catch {
+        return null;
+      }
+    },
     async writeBackup(path, text) {
       const dir = await pathApi.join(await backupRoot(), fnv1a64(path));
       await fs.mkdir(dir, { recursive: true });
@@ -237,6 +247,7 @@ function browserPlatform(): Platform {
       ls.setItem(docKey(path), text);
     },
     exists: async (path) => ls.getItem(docKey(path)) !== null,
+    stat: async () => null,
     writeBackup: async () => {},
     pruneBackups: async () => {},
     async loadStore(name) {

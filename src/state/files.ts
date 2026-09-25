@@ -4,7 +4,8 @@
 import type { Doc } from "../model/types";
 import { parseDocument, serializeDocument, normalizeViewState } from "../model/format";
 import { defaultViewState } from "../model/defaults";
-import { basename, displayName, platform, type PortableStatus } from "../platform";
+import { applyPatches } from "immer";
+import { basename, displayName, fnv1a64, platform, type PortableStatus } from "../platform";
 import { get, set, toast, updatePrefs, useApp } from "./store";
 import { normalizePreferences } from "./prefs";
 import { normalizePrintSettings } from "../print/settings";
@@ -97,16 +98,105 @@ function loadDoc(doc: Doc, path: string) {
     savedRevision: 0,
     saveError: null,
     localStack: null,
+    unsavedPatches: [],
   });
   addRecent(path);
   updateTitle();
 }
 
+// ---------------------------------------------------------------------------
+// Disk state: what we last read or wrote, so outside edits (another program,
+// cascade-cli, an agent, a text editor) are detected and never overwritten.
+// ---------------------------------------------------------------------------
+
+let disk: { path: string; hash: string; mtime: number } | null = null;
+/** Saves and external-change checks run one at a time. */
+let queue: Promise<unknown> = Promise.resolve();
+function serialized<T>(fn: () => Promise<T>): Promise<T> {
+  const run = queue.then(fn, fn);
+  queue = run.catch(() => {});
+  return run;
+}
+
+async function rememberDisk(path: string, text: string) {
+  const st = await platform().stat(path);
+  disk = { path, hash: fnv1a64(text), mtime: st?.mtime ?? 0 };
+}
+
+/**
+ * If the open file changed on disk, reload it, re-applying edits made here
+ * since the last save. Returns true when a change was merged in.
+ */
+async function checkDisk(): Promise<boolean> {
+  const s = get();
+  if (!s.doc || !s.filePath || !disk || disk.path !== s.filePath) return false;
+  const st = await platform().stat(s.filePath);
+  if (!st || st.mtime === disk.mtime) return false;
+  let text: string;
+  try {
+    text = await platform().readText(s.filePath);
+  } catch {
+    return false;
+  }
+  const hash = fnv1a64(text);
+  if (hash === disk.hash) {
+    disk.mtime = st.mtime;
+    return false;
+  }
+  let parsed;
+  try {
+    parsed = parseDocument(text);
+  } catch (e) {
+    // Half-written or invalid: try again on the next check.
+    console.warn("External change could not be read yet", e);
+    return false;
+  }
+  disk = { path: s.filePath, hash, mtime: st.mtime };
+  const cur = get();
+  let doc = parsed.doc;
+  let reapplied = 0;
+  let skipped = 0;
+  for (const patch of cur.unsavedPatches) {
+    try {
+      doc = applyPatches(doc, [patch]);
+      reapplied++;
+    } catch {
+      skipped++;
+    }
+  }
+  const view = normalizeViewState(cur.view, new Set(Object.keys(doc.items)), doc.config.spaces);
+  const editOk = cur.edit && doc.items[cur.edit.itemId];
+  set({
+    doc,
+    view: { ...view, calendarCurrentDate: cur.view.calendarCurrentDate },
+    edit: editOk ? cur.edit : null,
+    past: [],
+    future: [],
+    unsavedPatches: reapplied ? cur.unsavedPatches : [],
+    // Only a merge produces something new to save.
+    revision: reapplied ? cur.revision + 1 : cur.revision,
+  });
+  toast(
+    skipped
+      ? `${basename(s.filePath)} changed on disk; reloaded (${skipped} of your recent edits conflicted and were dropped)`
+      : `${basename(s.filePath)} changed on disk; reloaded`,
+    skipped ? "error" : "info",
+  );
+  return reapplied > 0;
+}
+
 /** Write the current document to disk (atomic), plus a periodic backup. */
-export async function saveNow(): Promise<boolean> {
+export function saveNow(): Promise<boolean> {
+  return serialized(saveUnlocked);
+}
+
+async function saveUnlocked(): Promise<boolean> {
+  // Never overwrite a change made outside the app: merge it in first.
+  await checkDisk();
   const s = get();
   if (!s.doc || !s.filePath) return false;
   const rev = s.revision;
+  const patchCount = s.unsavedPatches.length;
   let text: string;
   try {
     text = serializeDocument(withViewState(s.doc));
@@ -116,8 +206,17 @@ export async function saveNow(): Promise<boolean> {
     return false;
   }
   try {
+    if (disk && disk.path === s.filePath && disk.hash === fnv1a64(text)) {
+      set((st) => ({ savedRevision: Math.max(st.savedRevision, rev), unsavedPatches: st.unsavedPatches.slice(patchCount) }));
+      return true;
+    }
     await platform().writeTextAtomic(s.filePath, text);
-    set((st) => ({ savedRevision: Math.max(st.savedRevision, rev), saveError: null }));
+    await rememberDisk(s.filePath, text);
+    set((st) => ({
+      savedRevision: Math.max(st.savedRevision, rev),
+      saveError: null,
+      unsavedPatches: st.unsavedPatches.slice(patchCount),
+    }));
     const last = lastBackupAt.get(s.filePath) ?? 0;
     if (Date.now() - last > BACKUP_INTERVAL_MS) {
       lastBackupAt.set(s.filePath, Date.now());
@@ -132,6 +231,16 @@ export async function saveNow(): Promise<boolean> {
     toast(msg, "error", 6000);
     return false;
   }
+}
+
+/** Poll the open file for outside changes (about once a second). */
+export function startWatchingDisk(): () => void {
+  const timer = setInterval(() => {
+    void serialized(async () => {
+      if (await checkDisk()) await saveUnlocked();
+    });
+  }, 1000);
+  return () => clearInterval(timer);
 }
 
 export async function openPath(pathOrStored: string): Promise<boolean> {
@@ -153,6 +262,7 @@ export async function openPath(pathOrStored: string): Promise<boolean> {
   try {
     const result = parseDocument(text);
     loadDoc(result.doc, path);
+    await rememberDisk(path, text);
     // Keep a copy of what we opened before any migration rewrites it.
     lastBackupAt.set(path, Date.now());
     platform()
@@ -184,6 +294,7 @@ export async function newDocument(template: DocTemplate = DOC_TEMPLATES[0]): Pro
   const path = await platform().pickSavePath(root ? `${root}/${name}` : name);
   if (!path) return;
   if (get().doc) await saveNow();
+  disk = null;
   const doc = template.build();
   doc.config.viewState = normalizeViewState(doc.config.viewState, new Set(Object.keys(doc.items)), doc.config.spaces);
   loadDoc(doc, path);

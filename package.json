@@ -2,7 +2,7 @@
   "name": "cascade",
   "private": true,
   "version": "0.1.0",
-  "description": "Cascade — an open-source, horizontal, column-based nested to-do list.",
+  "description": "Cascade \u2014 an open-source, horizontal, column-based nested to-do list.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -12,11 +12,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:cli": "vite build -c vite.cli.config.ts && chmod +x dist-cli/cascade-cli.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
+    "@modelcontextprotocol/sdk": "^1.30.1",
     "@point-of-sale/receipt-printer-encoder": "^4.0.1",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.3",
@@ -31,6 +33,7 @@
     "lucide-react": "^1.48.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "zod": "^4.6.5",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -43,5 +46,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"
+  },
+  "bin": {
+    "cascade-cli": "dist-cli/cascade-cli.mjs"
   }
 }

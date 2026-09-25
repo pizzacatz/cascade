@@ -7,7 +7,7 @@ import "./styles/layout.css";
 import "./styles/overlays.css";
 import { App } from "./App";
 import { initPlatform, type Platform } from "./platform";
-import { loadSettings, openPath, startPersistence } from "./state/files";
+import { loadSettings, openPath, startPersistence, startWatchingDisk } from "./state/files";
 import { cliOpenedSomething, startCli } from "./state/cli";
 import { get, set, toast } from "./state/store";
 
@@ -35,6 +35,7 @@ async function boot() {
 
   await loadSettings().catch((e) => console.warn("Settings could not be loaded", e));
   startPersistence();
+  startWatchingDisk();
   platform.pruneBackups().catch(() => {});
 
   createRoot(document.getElementById("root")!).render(
