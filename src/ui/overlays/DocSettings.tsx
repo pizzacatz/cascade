@@ -12,6 +12,8 @@ import {
   ListChecks,
   Palette,
   Printer,
+  AlertTriangle,
+  CalendarDays,
 } from "lucide-react";
 import type {
   Condition,
@@ -24,11 +26,11 @@ import type {
   Weekday,
 } from "../../model/types";
 import { NUMBER_FIELDS, NUMBER_OPERATORS, SCHEDULE_OPERATORS, TEXT_OPERATORS, TRASH_SPACE_ID, TREE_SPACE_ID } from "../../model/types";
-import { isUserSpace, sortSpaces, breadcrumb } from "../../model/tree";
+import { isUserSpace, sortSpaces, breadcrumb, spaceOf } from "../../model/tree";
 import { sortRules } from "../../model/formatting";
 import { describeRecurrence, recurrenceMatches, toRRule } from "../../model/recurrence";
 import { addDays, formatLongDay } from "../../model/dates";
-import { useApp } from "../../state/store";
+import { get, useApp } from "../../state/store";
 import { indexOf, today } from "../../state/derived";
 import { confirmAction, openOverlay } from "../../state/overlays";
 import {
@@ -37,6 +39,7 @@ import {
   createSpace,
   createTag,
   deleteRecurrenceRule,
+  duplicateRecurrenceRule,
   deleteRule,
   deleteSpace,
   deleteTag,
@@ -58,6 +61,7 @@ import { displayName } from "../../platform";
 import { ColorPicker, IconButton } from "../Pickers";
 import { Icon } from "../icons";
 import { Modal, SettingsSwitcher } from "./Modal";
+import { MonthGrid } from "../MonthGrid";
 
 type Tab = "general" | "spaces" | "tags" | "formatting" | "recurrence";
 const TABS: [Tab, string][] = [
@@ -84,7 +88,7 @@ export function DocSettings({ tab, ruleId }: { tab: Tab; ruleId?: string }) {
         {tab === "spaces" && <SpacesTab />}
         {tab === "tags" && <TagsTab />}
         {tab === "formatting" && <FormattingTab initial={ruleId} />}
-        {tab === "recurrence" && <RecurrenceTab />}
+        {tab === "recurrence" && <RecurrenceTab initial={ruleId} />}
       </div>
     </Modal>
   );
@@ -189,7 +193,7 @@ function SpacesTab() {
             onClick={() =>
               confirmAction({
                 title: `Delete “${sp.name}”?`,
-                message: "Its items move to Trash. Formatting conditions referencing this space are removed.",
+                message: `${spaceItemCount(sp.id)} item${spaceItemCount(sp.id) === 1 ? "" : "s"} will move to Trash. Formatting conditions referencing this space are removed.`,
                 confirmLabel: "Delete",
                 danger: true,
                 onConfirm: () => deleteSpace(sp.id),
@@ -252,13 +256,16 @@ function TagsTab() {
             <button className="btn btn-ghost btn-sm btn-icon" aria-label="Move down" onClick={() => moveTag(t.id, 1)}>
               <ArrowDown size={14} />
             </button>
+            <button className="btn btn-ghost btn-sm btn-icon" aria-label="Duplicate tag" title="Duplicate" onClick={() => createTag(`${t.name} copy`, t.color, t.icon)}>
+              <CopyPlus size={14} />
+            </button>
             <button
               className="btn btn-ghost btn-sm btn-icon"
               aria-label="Delete tag"
               onClick={() =>
                 confirmAction({
                   title: `Delete tag “${t.name}”?`,
-                  message: "It is removed from every item and from formatting rules that reference it.",
+                  message: `This tag will be removed from ${tagUseCount(t.id)} item${tagUseCount(t.id) === 1 ? "" : "s"} and from formatting rules that reference it.`,
                   confirmLabel: "Delete",
                   danger: true,
                   onConfirm: () => deleteTag(t.id),
@@ -396,7 +403,7 @@ function RuleEditor({ rule, onSelect }: { rule: FormatRule; onSelect: (id: strin
           className="btn btn-ghost btn-sm btn-icon"
           aria-label="Delete rule"
           onClick={() =>
-            confirmAction({ title: `Delete rule “${rule.name}”?`, message: "This cannot be undone from here (use Undo).", confirmLabel: "Delete", danger: true, onConfirm: () => { deleteRule(rule.id); onSelect(undefined); } })
+            confirmAction({ title: `Delete rule “${rule.name}”?`, message: `This rule, its ${rule.conditions.length} condition${rule.conditions.length === 1 ? "" : "s"} and its style will be deleted (Undo restores it).`, confirmLabel: "Delete", danger: true, onConfirm: () => { deleteRule(rule.id); onSelect(undefined); } })
           }
         >
           <Trash2 size={14} />
@@ -664,35 +671,42 @@ const WEEKDAYS: [Weekday, string][] = [
 ];
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-function RecurrenceTab() {
+function RecurrenceTab({ initial }: { initial?: string }) {
   const rules = useApp((s) => s.doc?.config.recurrenceRules ?? []);
   const sorted = sortRules(rules);
-  const [selected, setSelected] = useState<string | undefined>(sorted[0]?.id);
+  const [selected, setSelected] = useState<string | undefined>(initial ?? sorted[0]?.id);
   const rule = rules.find((r) => r.id === selected) ?? sorted[0];
+  const row = (r: RecurrenceRule) => (
+    <div key={r.id} className={`rule-row ${rule?.id === r.id ? "is-active" : ""}`} onClick={() => setSelected(r.id)}>
+      <input
+        type="checkbox"
+        className="switch"
+        checked={r.enabled}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => updateRecurrenceRule(r.id, (d) => void (d.enabled = e.target.checked))}
+        aria-label="Active"
+        title={r.enabled ? "Active — click to archive" : "Archived — click to activate"}
+      />
+      <span className="grow ellipsis">{r.name}</span>
+    </div>
+  );
+  const active = sorted.filter((r) => r.enabled);
+  const archived = sorted.filter((r) => !r.enabled);
   return (
     <div className="split-pane">
       <div className="split-list">
-        <div className="settings-subhead">Recurring rules</div>
-        {sorted.map((r) => (
-          <div key={r.id} className={`rule-row ${rule?.id === r.id ? "is-active" : ""}`} onClick={() => setSelected(r.id)}>
-            <input
-              type="checkbox"
-              className="switch"
-              checked={r.enabled}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => updateRecurrenceRule(r.id, (d) => void (d.enabled = e.target.checked))}
-              aria-label="Enabled"
-            />
-            <span className="grow ellipsis">{r.name}</span>
-          </div>
-        ))}
+        <div className="settings-subhead">Active</div>
+        {active.map(row)}
+        {active.length === 0 && <p className="muted small">No active rules.</p>}
+        {archived.length > 0 && <div className="settings-subhead">Archived</div>}
+        {archived.map(row)}
         <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={() => setSelected(createRecurrenceRule() ?? undefined)}>
           <Plus size={13} /> New rule
         </button>
       </div>
       <div className="split-detail">
         {rule ? (
-          <RecurrenceEditor key={rule.id} rule={rule} onDeleted={() => setSelected(undefined)} />
+          <RecurrenceEditor key={rule.id} rule={rule} onDeleted={() => setSelected(undefined)} onSelect={setSelected} />
         ) : (
           <div className="stack-v">
             <p className="muted">
@@ -706,7 +720,11 @@ function RecurrenceTab() {
   );
 }
 
-function RecurrenceEditor({ rule, onDeleted }: { rule: RecurrenceRule; onDeleted: () => void }) {
+function RecurrenceEditor({ rule, onDeleted, onSelect }: { rule: RecurrenceRule; onDeleted: () => void; onSelect: (id: string) => void }) {
+  const [picking, setPicking] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [previewMonth, setPreviewMonth] = useState(today());
+  const weekStartsOnPref = useApp((s) => s.prefs.weekStartsOn);
   const doc = useApp((s) => s.doc);
   const ix = indexOf(doc);
   const templates = templateItems(doc);
@@ -792,6 +810,19 @@ function RecurrenceEditor({ rule, onDeleted }: { rule: RecurrenceRule; onDeleted
           </div>
         </div>
       )}
+      {r.frequency === "weekly" && (
+        <div className="field">
+          <span className="field-label">Week starts on</span>
+          <div className="segmented">
+            {(["monday", "sunday"] as const).map((w) => (
+              <button key={w} aria-pressed={r.weekStartsOn === w} onClick={() => up((x) => void (x.recurrence.frequency === "weekly" && (x.recurrence.weekStartsOn = w)))}>
+                {w === "monday" ? "Monday" : "Sunday"}
+              </button>
+            ))}
+          </div>
+          <span className="field-hint">Matters for rules that repeat every 2+ weeks.</span>
+        </div>
+      )}
       {r.frequency === "monthly" && (
         <div className="field">
           <span className="field-label">On</span>
@@ -874,31 +905,82 @@ function RecurrenceEditor({ rule, onDeleted }: { rule: RecurrenceRule; onDeleted
         </label>
       </div>
       <div className="field">
-        <span className="field-label">Templates to prepare</span>
-        {templates.length === 0 ? (
-          <span className="field-hint">No template items yet. Turn a folder into a template (Turn into → Template); its contents are copied onto matching days.</span>
-        ) : (
-          <div className="settings-list">
-            {templates.map((tp) => (
-              <label key={tp.id} className="field-inline">
-                <span>
-                  <Icon name={tp.icon} size={13} /> {tp.text || "Untitled template"} <span className="faint">{breadcrumb(ix, tp.id).join(" › ")}</span>
-                </span>
-                <input
-                  type="checkbox"
-                  className="switch"
-                  checked={rule.templates.includes(tp.id)}
-                  onChange={(e) =>
-                    up((x) => {
-                      x.templates = e.target.checked ? [...x.templates, tp.id] : x.templates.filter((id) => id !== tp.id);
+        <span className="field-label">Templates to prepare, in order</span>
+        {rule.templates.length === 0 && <span className="field-hint">No templates yet. Their contents are copied onto matching days, in this order.</span>}
+        <div className="settings-list">
+          {rule.templates.map((id, i) => {
+            const tp = ix.items[id];
+            return (
+              <div key={`${id}-${i}`} className="settings-row template-occurrence">
+                <span className="faint small">{i + 1}.</span>
+                {tp && tp.type === "template" ? (
+                  <span className="grow ellipsis">
+                    <Icon name={tp.icon} size={13} /> {tp.text || "Untitled template"} <span className="faint">{breadcrumb(ix, tp.id).join(" › ")}</span>
+                  </span>
+                ) : (
+                  <span className="grow ellipsis warning-text">
+                    <AlertTriangle size={13} /> Missing template
+                  </span>
+                )}
+                <button className="btn btn-ghost btn-sm btn-icon" aria-label="Move up" disabled={i === 0} onClick={() => up((x) => void x.templates.splice(i - 1, 0, x.templates.splice(i, 1)[0]))}>
+                  <ArrowUp size={13} />
+                </button>
+                <button className="btn btn-ghost btn-sm btn-icon" aria-label="Move down" disabled={i === rule.templates.length - 1} onClick={() => up((x) => void x.templates.splice(i + 1, 0, x.templates.splice(i, 1)[0]))}>
+                  <ArrowDown size={13} />
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm btn-icon"
+                  aria-label="Remove template"
+                  onClick={() =>
+                    confirmAction({
+                      title: `Remove template occurrence ${i + 1}?`,
+                      message: "The template itself is kept; it just won't be prepared by this rule at this position.",
+                      confirmLabel: "Remove",
+                      danger: true,
+                      onConfirm: () => up((x) => void x.templates.splice(i, 1)),
                     })
                   }
-                />
-              </label>
-            ))}
-          </div>
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        {picking ? (
+          <TemplatePicker
+            onPick={(id) => {
+              up((x) => void x.templates.push(id));
+              setPicking(false);
+            }}
+            onCancel={() => setPicking(false)}
+          />
+        ) : (
+          <button className="btn btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => setPicking(true)} disabled={templates.length === 0} title={templates.length ? undefined : "Turn a folder into a template first (Type ▸ Template)"}>
+            <Plus size={13} /> Add template
+          </button>
         )}
       </div>
+      <div className="row">
+        <button className="btn btn-sm" onClick={() => setShowSchedule((v) => !v)}>
+          <CalendarDays size={13} /> {showSchedule ? "Hide schedule" : "Preview schedule"}
+        </button>
+        <button className="btn btn-sm" onClick={() => { const id = duplicateRecurrenceRule(rule.id); if (id) onSelect(id); }}>
+          <CopyPlus size={13} /> Duplicate rule
+        </button>
+      </div>
+      {showSchedule && (
+        <div className="schedule-preview">
+          <MonthGrid
+            month={previewMonth}
+            today={t}
+            weekStartsOn={weekStartsOnPref}
+            inRange={(d) => recurrenceMatches(r, d)}
+            onSelect={() => {}}
+            onMonthChange={setPreviewMonth}
+          />
+        </div>
+      )}
       <div className="recurrence-summary">
         <div>{describeRecurrence(r)}</div>
         <div className="mono faint small">RRULE:{toRRule(r)}</div>
@@ -906,4 +988,50 @@ function RecurrenceEditor({ rule, onDeleted }: { rule: RecurrenceRule; onDeleted
       </div>
     </div>
   );
+}
+
+/** Searchable picker of template items in active spaces (excludes archived spaces and Trash). */
+function TemplatePicker({ onPick, onCancel }: { onPick: (id: string) => void; onCancel: () => void }) {
+  const doc = useApp((s) => s.doc);
+  const ix = indexOf(doc);
+  const [q, setQ] = useState("");
+  const archived = new Set((doc?.config.spaces ?? []).filter((sp) => sp.archived).map((sp) => sp.id));
+  const list = templateItems(doc)
+    .filter((tp) => {
+      const sp = spaceOf(ix, tp.id);
+      return sp !== TRASH_SPACE_ID && !(sp && archived.has(sp));
+    })
+    .filter((tp) => !q.trim() || tp.text.toLowerCase().includes(q.trim().toLowerCase()));
+  return (
+    <div className="template-picker">
+      <div className="row">
+        <input className="input grow" autoFocus placeholder="Select template…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())} />
+        <button className="btn btn-sm" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+      <span className="field-hint">Templates in active spaces · Excludes archived spaces and Trash</span>
+      <div className="settings-list">
+        {list.map((tp) => (
+          <button key={tp.id} className="template-row" onClick={() => onPick(tp.id)}>
+            <strong>
+              <Icon name={tp.icon} size={13} /> {tp.text || "Untitled template"}
+            </strong>
+            <span className="faint">{breadcrumb(ix, tp.id).join(" › ")}</span>
+            <span className="muted">{ix.children.get(tp.id)?.length ?? 0} items</span>
+          </button>
+        ))}
+        {list.length === 0 && <p className="muted small">No matching templates.</p>}
+      </div>
+    </div>
+  );
+}
+
+function tagUseCount(tagId: string): number {
+  return Object.values(get().doc?.items ?? {}).filter((i) => i.tags.includes(tagId)).length;
+}
+
+function spaceItemCount(spaceId: string): number {
+  const ix = indexOf(get().doc);
+  return Object.values(ix.items).filter((i) => spaceOf(ix, i.id) === spaceId).length;
 }

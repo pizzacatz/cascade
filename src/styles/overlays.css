@@ -645,3 +645,45 @@ input[type="range"] {
   background: var(--accent-soft);
   color: var(--accent);
 }
+
+.warning-text {
+  color: var(--item-color-orange);
+}
+.template-occurrence {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.template-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.schedule-preview {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-width: 380px;
+}
+.icon-unknown {
+  display: inline-grid;
+  margin-left: -6px;
+  color: var(--item-color-orange);
+}
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+.link-btn:hover {
+  text-decoration: underline;
+}

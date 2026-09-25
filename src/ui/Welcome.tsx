@@ -11,7 +11,7 @@ export function Welcome() {
   const recent = useApp((s) => s.prefs.recentFiles);
   return (
     <div className="welcome">
-      <div className="welcome-card">
+      <div className="welcome-card" onKeyDown={onWelcomeKey}>
         <div className="welcome-brand">
           <Logo />
           <div>
@@ -74,8 +74,10 @@ export function Welcome() {
           </div>
         )}
         <p className="welcome-foot faint">
-          Press <span className="kbd">{keyLabel("command")}</span> for every command · <span className="kbd">F1</span> for help
+          Press <span className="kbd">{keyLabel("command")}</span> for every command · <span className="kbd">F1</span> for help · ↑↓ to move between
+          actions
         </p>
+        <p className="welcome-version faint">Cascade 0.1.0</p>
       </div>
     </div>
   );
@@ -90,4 +92,15 @@ export function Logo({ size = 44 }: { size?: number }) {
       <rect x="31" y="12" width="7" height="10" rx="2.5" fill="var(--accent-contrast)" opacity="0.65" />
     </svg>
   );
+}
+
+/** ↑/↓ move focus through the actions, templates and recent documents. */
+function onWelcomeKey(e: React.KeyboardEvent<HTMLDivElement>) {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const items = [...e.currentTarget.querySelectorAll<HTMLElement>(".welcome-action, .template-card, .recent-item")];
+  if (!items.length) return;
+  e.preventDefault();
+  const i = items.indexOf(document.activeElement as HTMLElement);
+  const next = e.key === "ArrowDown" ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
+  items[i < 0 ? 0 : next].focus();
 }

@@ -80,7 +80,10 @@ export function App() {
           {showHelp && <HelpPanel />}
         </>
       ) : (
-        <Welcome />
+        <>
+          <Welcome />
+          {showHelp && <HelpPanel />}
+        </>
       )}
       <OverlayHost />
       <DragGhost />

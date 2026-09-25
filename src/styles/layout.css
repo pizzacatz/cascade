@@ -1448,3 +1448,13 @@ button.date-chip:hover {
 .stack-message.is-break {
   color: var(--success);
 }
+
+.mode-pill {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.welcome-version {
+  margin: -12px 0 0;
+  font-size: 11px;
+}

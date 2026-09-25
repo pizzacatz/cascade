@@ -171,7 +171,10 @@ function DayColumn({ date, width }: { date: string; width: number }) {
           <div className="recurring-block">
             <div className="recurring-divider">
               <Repeat size={12} />
-              <span className="ellipsis">{rules.map((r) => r.name).join(", ")}</span>
+              <span className="ellipsis grow">{rules.map((r) => r.name).join(", ")}</span>
+              <button className="link-btn" onClick={() => openOverlay({ kind: "docSettings", tab: "recurrence", ruleId: rules[0].id })}>
+                Edit rule
+              </button>
             </div>
             {prepared ? (
               <div className="recurring-prepared">

@@ -311,6 +311,22 @@ export function deleteRecurrenceRule(id: string): void {
   });
 }
 
+export function duplicateRecurrenceRule(id: string): string | null {
+  const s = get();
+  const src = s.doc?.config.recurrenceRules.find((r) => r.id === id);
+  if (!s.doc || !src) return null;
+  const sorted = sortRules(s.doc.config.recurrenceRules);
+  const i = sorted.findIndex((r) => r.id === id);
+  const copy = structuredClone(src);
+  copy.id = newId();
+  copy.name = `${src.name} copy`;
+  copy.priority = keyBetween(src.priority, sorted[i + 1]?.priority ?? null);
+  transact("Duplicate recurrence rule", (d) => {
+    d.config.recurrenceRules.push(copy);
+  });
+  return copy.id;
+}
+
 export function moveRecurrenceRule(id: string, delta: -1 | 1): void {
   const s = get();
   const p = s.doc && reorderByPriority(s.doc.config.recurrenceRules, id, delta);

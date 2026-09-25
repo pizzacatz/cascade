@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Color } from "../model/types";
 import { COLORS } from "../model/types";
-import { ICON_NAMES, Icon, iconKeywords } from "./icons";
+import { ICON_NAMES, Icon, iconKeywords, isKnownIcon } from "./icons";
+import { AlertTriangle } from "lucide-react";
 import { fuzzyFilter } from "./fuzzy";
 
 const LABEL = (c: Color) => (c === "default" ? "Default" : c[0].toUpperCase() + c.slice(1));
@@ -49,6 +50,11 @@ export function IconButton({ value, onChange }: { value: string; onChange: (name
       <button className="btn btn-sm btn-icon" aria-label="Change icon" onClick={() => setOpen((o) => !o)}>
         <Icon name={value} size={15} />
       </button>
+      {!isKnownIcon(value) && (
+        <span className="icon-unknown" title={`This icon name ("${value}") is not in the icon catalog.`}>
+          <AlertTriangle size={12} />
+        </span>
+      )}
       {open && (
         <div className="popover" onMouseLeave={() => setOpen(false)}>
           <IconPicker
