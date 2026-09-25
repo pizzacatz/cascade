@@ -66,7 +66,6 @@ import {
   deleteSpace,
   duplicateSpace,
   moveSpace,
-  prepareDayWithToast,
   setSpaceArchived,
   sortedTags,
   unprepareDay,
@@ -300,7 +299,7 @@ function surfaceEntries(t: Extract<ContextTarget, { type: "surface" }>): MenuEnt
     ...(isDay
       ? [
           { separator: true },
-          { label: "Prepare recurring tasks", icon: <CalendarCheck size={14} />, disabled: !future || prepared, run: () => "date" in scope && prepareDayWithToast(scope.date) },
+          { label: "Prepare recurring tasks", icon: <CalendarCheck size={14} />, disabled: !future || prepared, run: () => "date" in scope && openOverlay({ kind: "prepare", date: scope.date }) },
           ...(prepared ? [{ label: "Allow preparing again", icon: <CalendarX size={14} />, run: () => "date" in scope && unprepareDay(scope.date) }] : []),
         ]
       : []),

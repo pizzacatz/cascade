@@ -5,7 +5,7 @@ import { ConfirmDialog, PromptDialog } from "./Dialogs";
 import { AppSettings } from "./AppSettings";
 import { DocSettings } from "./DocSettings";
 import { PrintOverlay, PrintSettingsOverlay } from "./PrintOverlays";
-import { AboutOverlay, DebugOverlay, StackOverlay, TemplateOverlay } from "./MiscOverlays";
+import { AboutOverlay, DebugOverlay, PrepareOverlay, StackOverlay, TemplateOverlay } from "./MiscOverlays";
 
 export function OverlayHost() {
   const o = useApp((s) => s.overlay);
@@ -35,5 +35,7 @@ export function OverlayHost() {
       return <DebugOverlay tab={o.tab} />;
     case "about":
       return <AboutOverlay />;
+    case "prepare":
+      return <PrepareOverlay date={o.date} />;
   }
 }

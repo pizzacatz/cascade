@@ -345,6 +345,23 @@ export function templateItems(doc: Doc | null): Item[] {
   return doc ? Object.values(doc.items).filter((x) => x.type === "template") : [];
 }
 
+/** What preparing a day would create: matching rules and the template contents. */
+export function preparePreview(doc: Doc | null, date: string): { rules: RecurrenceRule[]; items: Item[] } {
+  if (!doc) return { rules: [], items: [] };
+  const ix = indexOf(doc);
+  const rules = rulesForDay(doc.config.recurrenceRules, date);
+  const items = rules.flatMap((r) =>
+    r.templates
+      .map((id) => ix.items[id])
+      .filter((x): x is Item => !!x && x.type === "template")
+      .flatMap((tpl) => {
+        const kids = childrenOf(ix, tpl.id);
+        return kids.length ? kids : [tpl];
+      }),
+  );
+  return { rules, items };
+}
+
 /** Materialize recurring templates for a day (today or later only). */
 export function prepareDay(date: string): PrepareResult {
   const s = get();

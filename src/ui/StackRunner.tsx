@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Maximize2, Minimize2, Pause, Play, Square, Undo2, GripVertical, Coffee } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Maximize2, Minimize2, Pause, Play, X, Undo2, GripVertical, Coffee } from "lucide-react";
 import { breadcrumb } from "../model/tree";
 import { useApp } from "../state/store";
 import { indexOf } from "../state/derived";
@@ -35,24 +35,63 @@ export function StackRunner({ compact = false }: { compact?: boolean }) {
   const now = useNow(!!st?.isRunning && !st.pausedAt);
   if (!st || !doc) return null;
   const ix = indexOf(doc);
-  const id = st.tasks[st.currentIndex];
-  const item = ix.items[id];
-  const tasks = st.tasks.filter((t) => ix.items[t]?.type === "task");
-  const done = tasks.filter((t) => isStackItemDone(t)).length;
-  const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+  const item = ix.items[st.tasks[st.currentIndex]];
+  const done = st.tasks.filter((t) => isStackItemDone(t)).length;
+  const total = st.tasks.length;
+  const allDone = !st.isRunning || done === total;
   const timer = timerState(cfg.timer, st.startedAt, st.pausedAt ?? now);
+  const onBreak = timer.phase === "break";
   const itemDone = item ? isStackItemDone(item.id) : false;
   const crumbs = item && cfg.displayBreadcrumb ? breadcrumb(ix, item.id) : [];
-  const sizeFor = (t: string | undefined) =>
-    t === "heading" ? cfg.fontSizes.heading : t === "text" ? cfg.fontSizes.text : cfg.fontSizes.task;
+  // The bar shows the timer when there is one, otherwise task progress.
+  const barFraction = timer.fraction ?? (total ? done / total : 0);
 
-  const timerEl =
-    cfg.timer.type !== "none" || !compact ? (
-      <span className={`stack-timer phase-${timer.phase}`} title={timer.phase === "break" ? "Break" : "Timer"}>
-        {timer.phase === "break" && <Coffee size={13} />}
-        {timer.label}
-      </span>
-    ) : null;
+  const controls = (
+    <>
+      <button className="btn btn-ghost btn-sm btn-icon" title="Previous task" aria-label="Previous task" onClick={stackPrevious} disabled={st.currentIndex === 0 || allDone}>
+        <ChevronLeft size={15} />
+      </button>
+      {!allDone &&
+        (itemDone ? (
+          <button className="btn btn-sm" title="Mark incomplete" onClick={stackMarkIncomplete}>
+            <Undo2 size={14} /> {!compact && "Mark incomplete"}
+          </button>
+        ) : (
+          <button className="btn btn-primary btn-sm" title="Mark complete" onClick={stackMarkComplete}>
+            <Check size={14} /> {!compact && "Mark complete"}
+          </button>
+        ))}
+      <button className="btn btn-ghost btn-sm btn-icon" title="Next task" aria-label="Next task" onClick={stackNext} disabled={st.currentIndex >= total - 1 || allDone}>
+        <ChevronRight size={15} />
+      </button>
+      {cfg.timer.type !== "none" && !allDone && (
+        <button className="btn btn-ghost btn-sm btn-icon" aria-label={st.pausedAt ? "Resume" : "Pause"} title={st.pausedAt ? "Resume" : "Pause"} onClick={stackTogglePause}>
+          {st.pausedAt ? <Play size={14} /> : <Pause size={14} />}
+        </button>
+      )}
+      <button className="btn btn-ghost btn-sm btn-icon" aria-label={compact ? "Expand" : "Compact runner"} title={compact ? "Back to the full window" : "Compact always-on-top runner"} onClick={() => void setCompact(!compact)}>
+        {compact ? <Maximize2 size={13} /> : <Minimize2 size={14} />}
+      </button>
+      <button className="btn btn-ghost btn-sm btn-icon" aria-label="Close" title="Close" onClick={stopStack}>
+        <X size={14} />
+      </button>
+    </>
+  );
+
+  const body = allDone ? (
+    <span className="stack-message">🎉 All Done!</span>
+  ) : onBreak ? (
+    <span className="stack-message is-break">
+      <Coffee size={14} /> Break · {timer.label}
+    </span>
+  ) : (
+    <span
+      className={`stack-current-text type-${item?.type ?? "task"} ${itemDone ? "is-strike" : ""}`}
+      style={compact ? undefined : { fontSize: `${FONT_SCALE[cfg.fontSizes.task] * 1.3}em` }}
+    >
+      {item?.text || "—"}
+    </span>
+  );
 
   if (compact) {
     return (
@@ -60,24 +99,14 @@ export function StackRunner({ compact = false }: { compact?: boolean }) {
         <span className="stack-grip" onMouseDown={() => void startCompactDrag()} aria-hidden>
           <GripVertical size={14} />
         </span>
-        {item?.type === "task" && (
-          <button className={`checkbox ${itemDone ? "is-checked" : ""}`} aria-label="Complete" onClick={itemDone ? stackMarkIncomplete : stackMarkComplete}>
-            {itemDone && <Check size={12} strokeWidth={3} />}
-          </button>
-        )}
-        <span className={`stack-compact-text ${itemDone ? "is-strike" : ""}`} data-tauri-drag-region onMouseDown={() => void startCompactDrag()}>
-          {item?.text || "—"}
-        </span>
-        <span className="faint stack-compact-count">
-          {st.currentIndex + 1}/{st.tasks.length}
-        </span>
-        {timerEl}
-        <button className="btn btn-ghost btn-sm btn-icon" aria-label="Next" onClick={stackNext}>
-          <ChevronRight size={14} />
-        </button>
-        <button className="btn btn-ghost btn-sm btn-icon" aria-label="Expand" onClick={() => void setCompact(false)}>
-          <Maximize2 size={13} />
-        </button>
+        <div className="stack-compact-main" data-tauri-drag-region onMouseDown={() => void startCompactDrag()}>
+          {body}
+          <span className="faint stack-compact-count">
+            {done}/{total}
+          </span>
+        </div>
+        {controls}
+        <div className={`stack-timebar ${onBreak ? "is-break" : ""} ${timer.phase === "overtime" ? "is-over" : ""}`} style={{ width: `${barFraction * 100}%` }} />
       </div>
     );
   }
@@ -88,49 +117,21 @@ export function StackRunner({ compact = false }: { compact?: boolean }) {
         <div className="stack-meta">
           <span className="stack-label">Stack · {st.label}</span>
           <span className="faint">
-            {st.currentIndex + 1} of {st.tasks.length} · {done}/{tasks.length} done ({pct}%)
+            Progress {done} / {total}
+            {cfg.timer.type !== "none" && ` · ${timer.label}`}
           </span>
         </div>
-        {crumbs.length > 0 && (
+        {crumbs.length > 0 && !allDone && !onBreak && (
           <div className="stack-crumbs" style={{ fontSize: `${FONT_SCALE[cfg.fontSizes.breadcrumb]}em` }}>
             {crumbs.join(" › ")}
           </div>
         )}
-        <div className={`stack-current type-${item?.type ?? "task"} ${itemDone ? "is-strike" : ""}`} style={{ fontSize: `${FONT_SCALE[sizeFor(item?.type)] * 1.3}em` }}>
-          {item?.text || "—"}
-        </div>
+        <div className="stack-current">{body}</div>
         <div className="stack-progress">
-          <div className="stack-progress-bar" style={{ width: `${pct}%` }} />
+          <div className={`stack-progress-bar ${onBreak ? "is-break" : ""}`} style={{ width: `${barFraction * 100}%` }} />
         </div>
       </div>
-      <div className="stack-controls">
-        {timerEl}
-        <button className="btn btn-ghost btn-icon" aria-label="Previous" onClick={stackPrevious} disabled={st.currentIndex === 0}>
-          <ChevronLeft size={16} />
-        </button>
-        {item?.type === "task" &&
-          (itemDone ? (
-            <button className="btn" onClick={stackMarkIncomplete}>
-              <Undo2 size={15} /> Incomplete
-            </button>
-          ) : (
-            <button className="btn btn-primary" onClick={stackMarkComplete}>
-              <Check size={15} /> Complete
-            </button>
-          ))}
-        <button className="btn btn-ghost btn-icon" aria-label="Next" onClick={stackNext} disabled={st.currentIndex >= st.tasks.length - 1}>
-          <ChevronRight size={16} />
-        </button>
-        <button className="btn btn-ghost btn-icon" aria-label={st.pausedAt ? "Resume" : "Pause"} onClick={stackTogglePause}>
-          {st.pausedAt ? <Play size={15} /> : <Pause size={15} />}
-        </button>
-        <button className="btn btn-ghost btn-icon" aria-label="Compact runner" title="Compact always-on-top runner" onClick={() => void setCompact(true)}>
-          <Minimize2 size={15} />
-        </button>
-        <button className="btn btn-ghost btn-icon" aria-label="Stop stack" onClick={stopStack}>
-          <Square size={14} />
-        </button>
-      </div>
+      <div className="stack-controls">{controls}</div>
     </div>
   );
 }

@@ -13,20 +13,27 @@ import { closeAllOverlays, openOverlay } from "./overlays";
 import { currentPrintScope } from "./printing";
 import type { StackTimer } from "./prefs";
 
-/** Flatten a scope into the ordered list of items the stack walks through. */
-export function stackItems(ix: DocIndex, scope: PrintScopeRef): Item[] {
+/** The tasks a stack walks through for a scope. */
+export function stackItems(ix: DocIndex, scope: PrintScopeRef, opts: { recursive?: boolean; includeFinished?: boolean } = {}): Item[] {
+  const recursive = opts.recursive ?? true;
   const out: Item[] = [];
   const walk = (list: Item[]) => {
     for (const it of list) {
-      if (it.type === "separator") continue;
-      if (isContainerType(it.type)) walk(childrenOf(ix, it.id));
-      else if (it.type === "task" || it.type === "heading" || it.type === "text") out.push(it);
+      if (it.type === "task") {
+        if (opts.includeFinished !== false || !it.finished) out.push(it);
+      } else if (isContainerType(it.type) && recursive) walk(childrenOf(ix, it.id));
     }
   };
   switch (scope.kind) {
-    case "selection":
-      walk(topLevelOnly(ix, scope.ids).map((id) => ix.items[id]).filter(Boolean));
+    case "selection": {
+      const items = topLevelOnly(ix, scope.ids).map((id) => ix.items[id]).filter(Boolean);
+      // A selected folder contributes its tasks even when not recursing further.
+      for (const it of items) {
+        if (isContainerType(it.type)) walk(childrenOf(ix, it.id));
+        else walk([it]);
+      }
       break;
+    }
     case "column":
       walk(childrenOf(ix, scope.parentId));
       break;
@@ -63,12 +70,13 @@ export function openStack(scope: PrintScopeRef | null = currentPrintScope()): vo
 export function startStack(scope: PrintScopeRef, compact: boolean): void {
   const s = get();
   const ix = indexOf(s.doc);
-  const items = stackItems(ix, scope);
-  if (!items.some((x) => x.type === "task")) {
+  const items = stackItems(ix, scope, { recursive: s.prefs.stack.recursive, includeFinished: s.prefs.stack.includeFinished });
+  if (!items.length) {
     toast("There are no tasks to stack in this scope", "error");
     return;
   }
-  const firstOpen = items.findIndex((x) => x.type === "task" && !x.finished);
+  finishedLocally.clear();
+  const firstOpen = items.findIndex((x) => !x.finished);
   const now = Date.now();
   set({
     localStack: {
@@ -110,11 +118,16 @@ export function stackMarkComplete(): void {
   const id = st.tasks[st.currentIndex];
   if (s.prefs.stack.syncFinishedStatus && s.doc?.items[id]?.type === "task") setFinished([id], true);
   finishedLocally.add(id);
-  if (st.currentIndex < st.tasks.length - 1) go(1);
-  else {
-    toast("Stack complete — nice work!", "success");
-    set({ localStack: { ...st, isRunning: false } });
+  // Jump to the first unfinished task (after this one, wrapping around).
+  const n = st.tasks.length;
+  for (let k = 1; k <= n; k++) {
+    const i = (st.currentIndex + k) % n;
+    if (!isStackItemDone(st.tasks[i])) {
+      set({ localStack: { ...st, currentIndex: i, taskStartedAt: Date.now() } });
+      return;
+    }
   }
+  set({ localStack: { ...st, isRunning: false } }); // all done
 }
 
 export function stackMarkIncomplete(): void {

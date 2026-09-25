@@ -16,6 +16,9 @@ export interface StackTimer {
 
 export interface StackConfig {
   timer: StackTimer;
+  /** Walk into folders (true) or only take tasks at the top of the scope. */
+  recursive: boolean;
+  includeFinished: boolean;
   displayBreadcrumb: boolean;
   syncFinishedStatus: boolean;
   fontSizes: { breadcrumb: number; task: number; heading: number; text: number };
@@ -69,6 +72,8 @@ export function defaultPreferences(): Preferences {
     compactWindowPosition: null,
     stack: {
       timer: { type: "none", durationMinutes: 25, untilTime: "17:00", workMinutes: 25, breakMinutes: 5 },
+      recursive: true,
+      includeFinished: false,
       displayBreadcrumb: true,
       syncFinishedStatus: true,
       fontSizes: { breadcrumb: 1, task: 2, heading: 2, text: 1 },
@@ -123,6 +128,8 @@ export function normalizePreferences(raw: unknown): Preferences {
         workMinutes: clamp(num(timer.workMinutes, 25), 1, 180),
         breakMinutes: clamp(num(timer.breakMinutes, 5), 1, 60),
       },
+      recursive: bool(st.recursive, true),
+      includeFinished: bool(st.includeFinished, false),
       displayBreadcrumb: bool(st.displayBreadcrumb, true),
       syncFinishedStatus: bool(st.syncFinishedStatus, true),
       fontSizes: {

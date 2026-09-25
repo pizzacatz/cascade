@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Layers, BookmarkCheck, Info, Bug } from "lucide-react";
+import { Layers, BookmarkCheck, Info, Bug, CalendarCheck } from "lucide-react";
+import { addDays, formatLongDay } from "../../model/dates";
+import { MonthGrid, dayStatus } from "../MonthGrid";
 import { breadcrumb, buildIndex } from "../../model/tree";
 import { computeStats } from "../../model/progression";
 import { useApp, updatePrefs, historyLabels, type PrintScopeRef } from "../../state/store";
@@ -7,7 +9,7 @@ import { indexOf, today } from "../../state/derived";
 import { closeOverlay, openOverlay } from "../../state/overlays";
 import { scopeLabel, stackItems, startStack } from "../../state/stack";
 import { instantiateTemplate } from "../../state/items";
-import { templateItems } from "../../state/config";
+import { preparePreview, prepareDayWithToast, templateItems } from "../../state/config";
 import type { StackTimer } from "../../state/prefs";
 import { platform } from "../../platform";
 import { Modal } from "./Modal";
@@ -27,9 +29,25 @@ const TIMERS: { type: StackTimer["type"]; label: string; hint: string }[] = [
 export function StackOverlay({ scope }: { scope: PrintScopeRef }) {
   const cfg = useApp((s) => s.prefs.stack);
   const doc = useApp((s) => s.doc);
-  const items = useMemo(() => stackItems(indexOf(doc), scope), [doc, scope]);
-  const tasks = items.filter((x) => x.type === "task");
-  const open = tasks.filter((x) => !x.finished).length;
+  const view = useApp((s) => s.view);
+  const ix = indexOf(doc);
+  // "What to Execute": the column (or day/space) versus the selection.
+  const selIds = view.focusedView === "calendar" ? view.calendarSelection : view.columnsSelection;
+  const selectionScope: PrintScopeRef | null =
+    scope.kind === "selection" ? scope : selIds.length ? { kind: "selection", ids: selIds } : null;
+  const columnScope: PrintScopeRef = (() => {
+    if (scope.kind !== "selection") return scope;
+    const first = ix.items[scope.ids[0]];
+    if (view.focusedView === "calendar" && first?.scheduleDate) return { kind: "day", date: first.scheduleDate };
+    return { kind: "column", parentId: first?.parentId ?? view.currentSpaceId };
+  })();
+  const [which, setWhich] = useState<"column" | "selection">(scope.kind === "selection" ? "selection" : "column");
+  const active = which === "selection" && selectionScope ? selectionScope : columnScope;
+  const tasks = useMemo(
+    () => stackItems(ix, active, { recursive: cfg.recursive, includeFinished: cfg.includeFinished }),
+    [ix, active, cfg.recursive, cfg.includeFinished],
+  );
+  const done = tasks.filter((t) => t.finished).length;
   const setCfg = (patch: Partial<typeof cfg>) => updatePrefs({ stack: { ...cfg, ...patch } });
   const setTimer = (patch: Partial<StackTimer>) => setCfg({ timer: { ...cfg.timer, ...patch } });
   const sizeSel = (key: keyof typeof cfg.fontSizes, label: string) => (
@@ -47,24 +65,77 @@ export function StackOverlay({ scope }: { scope: PrintScopeRef }) {
 
   return (
     <Modal
-      title={`Stack · ${scopeLabel(scope)}`}
+      title="Stack"
       icon={<Layers size={16} />}
-      width={520}
+      width={580}
+      height="min(88vh, 760px)"
       footer={
         <>
-          <span className="muted grow">
-            {open} open of {tasks.length} task{tasks.length === 1 ? "" : "s"}
-          </span>
-          <button className="btn" disabled={!tasks.length} onClick={() => startStack(scope, true)}>
-            Start compact
+          <button className="btn" disabled={!tasks.length} onClick={() => startStack(active, false)}>
+            Run in window
           </button>
-          <button className="btn btn-primary" disabled={!tasks.length} autoFocus onClick={() => startStack(scope, false)}>
+          <button className="btn btn-primary" disabled={!tasks.length} autoFocus onClick={() => startStack(active, true)}>
             Start
           </button>
         </>
       }
     >
       <div className="stack-v">
+        <div className="field">
+          <span className="field-label">What to Execute</span>
+          <div className="segmented">
+            <button aria-pressed={which === "column"} onClick={() => setWhich("column")}>
+              {columnScope.kind === "day" ? "Day" : columnScope.kind === "space" ? "Space" : "Column"} · {scopeLabel(columnScope)}
+            </button>
+            <button aria-pressed={which === "selection"} disabled={!selectionScope} onClick={() => setWhich("selection")}>
+              Selection{selectionScope?.kind === "selection" ? ` (${selectionScope.ids.length})` : ""}
+            </button>
+          </div>
+        </div>
+        <div className="field">
+          <span className="field-label">Stack Options</span>
+          <div className="segmented">
+            <button aria-pressed={!cfg.recursive} onClick={() => setCfg({ recursive: false })}>
+              Individual tasks
+            </button>
+            <button aria-pressed={cfg.recursive} onClick={() => setCfg({ recursive: true })}>
+              Individual tasks (recursive)
+            </button>
+          </div>
+          <span className="field-hint">{cfg.recursive ? "Tasks inside folders are included." : "Folders are ignored; only tasks at this level."}</span>
+        </div>
+        <label className="field-inline">
+          <span>Add Finished Tasks</span>
+          <input type="checkbox" className="switch" checked={cfg.includeFinished} onChange={(e) => setCfg({ includeFinished: e.target.checked })} />
+        </label>
+        <label className="field-inline">
+          <span>
+            Don't Sync Status
+            <span className="field-hint block">When on, completing a task in the stack doesn't mark it finished in the document.</span>
+          </span>
+          <input type="checkbox" className="switch" checked={!cfg.syncFinishedStatus} onChange={(e) => setCfg({ syncFinishedStatus: !e.target.checked })} />
+        </label>
+        <div className="field">
+          <div className="row">
+            <span className="field-label grow">Tasks</span>
+            <span className="muted small">
+              Progress {done} / {tasks.length}
+            </span>
+          </div>
+          <div className="stack-progress">
+            <div className="stack-progress-bar" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} />
+          </div>
+          <div className="stack-preview">
+            {tasks.length === 0 && <p className="muted">No tasks in this scope.</p>}
+            {tasks.slice(0, 200).map((t) => (
+              <div key={t.id} className={`stack-preview-row ${t.finished ? "is-strike" : ""}`}>
+                <span className="checkbox">{t.finished ? "✓" : ""}</span>
+                <span className="ellipsis grow">{t.text || "Untitled"}</span>
+                <span className="faint small ellipsis">{breadcrumb(ix, t.id).join(" › ")}</span>
+              </div>
+            ))}
+          </div>
+        </div>
         <div className="field">
           <span className="field-label">Timer</span>
           <div className="segmented">
@@ -83,7 +154,6 @@ export function StackOverlay({ scope }: { scope: PrintScopeRef }) {
                 {m} min
               </button>
             ))}
-            <input className="input" type="number" min={1} max={600} style={{ width: 80 }} value={cfg.timer.durationMinutes} onChange={(e) => setTimer({ durationMinutes: Math.max(1, Number(e.target.value) || 1) })} />
           </div>
         )}
         {cfg.timer.type === "until" && (
@@ -104,24 +174,17 @@ export function StackOverlay({ scope }: { scope: PrintScopeRef }) {
             </label>
           </div>
         )}
-        <label className="field-inline">
-          <span>
-            Sync finished status
-            <span className="field-hint block">Completing a task in the stack marks it finished in the document.</span>
-          </span>
-          <input type="checkbox" className="switch" checked={cfg.syncFinishedStatus} onChange={(e) => setCfg({ syncFinishedStatus: e.target.checked })} />
-        </label>
-        <label className="field-inline">
-          <span>Display breadcrumb</span>
-          <input type="checkbox" className="switch" checked={cfg.displayBreadcrumb} onChange={(e) => setCfg({ displayBreadcrumb: e.target.checked })} />
-        </label>
         <details>
-          <summary className="muted">Font sizes</summary>
+          <summary className="muted">Display</summary>
           <div className="stack-v" style={{ marginTop: 8 }}>
-            {sizeSel("breadcrumb", "Breadcrumb")}
-            {sizeSel("task", "Task")}
-            {sizeSel("heading", "Heading")}
-            {sizeSel("text", "Text")}
+            <label className="field-inline">
+              <span>Display breadcrumb</span>
+              <input type="checkbox" className="switch" checked={cfg.displayBreadcrumb} onChange={(e) => setCfg({ displayBreadcrumb: e.target.checked })} />
+            </label>
+            {sizeSel("breadcrumb", "Breadcrumb size")}
+            {sizeSel("task", "Task size")}
+            {sizeSel("heading", "Heading size")}
+            {sizeSel("text", "Text size")}
           </div>
         </details>
       </div>
@@ -263,6 +326,122 @@ export function DebugOverlay({ tab }: { tab: "speed" | "drag" | "state" }) {
           </pre>
         )}
       </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Prepare recurring tasks: pick a day, then confirm with a preview.
+// ---------------------------------------------------------------------------
+
+export function PrepareOverlay({ date }: { date?: string }) {
+  const doc = useApp((s) => s.doc);
+  const weekStartsOn = useApp((s) => s.prefs.weekStartsOn);
+  const t = today();
+  const [day, setDay] = useState(date && date >= t ? date : t);
+  const [month, setMonth] = useState(day);
+  const [step, setStep] = useState<"pick" | "confirm">("pick");
+  const ix = indexOf(doc);
+  const prepared = !!doc?.config.preparedDays.includes(day);
+  const preview = preparePreview(doc, day);
+
+  const move = (delta: number) => {
+    const next = addDays(day, delta);
+    if (next < t) return;
+    setDay(next);
+    setMonth(next);
+  };
+  const apply = () => {
+    closeOverlay();
+    prepareDayWithToast(day);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (step === "pick") {
+        if (e.key === "ArrowLeft") move(-1);
+        else if (e.key === "ArrowRight") move(1);
+        else if (e.key === "ArrowUp") move(-7);
+        else if (e.key === "ArrowDown") move(7);
+        else if (e.key === "Enter") setStep("confirm");
+        else return;
+      } else {
+        if (e.key === "Backspace") setStep("pick");
+        else if (e.key === "Enter" && preview.items.length && !prepared) apply();
+        else return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  });
+
+  return (
+    <Modal
+      title="Prepare recurring tasks"
+      icon={<CalendarCheck size={16} />}
+      width={440}
+      footer={
+        step === "pick" ? (
+          <>
+            <span className="muted grow small">←↑↓→ choose a day · Enter continue</span>
+            <button className="btn btn-primary" onClick={() => setStep("confirm")}>
+              Continue
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="muted grow small">Backspace back</span>
+            <button className="btn" onClick={() => setStep("pick")}>
+              Back
+            </button>
+            <button className="btn btn-primary" disabled={!preview.items.length || prepared} onClick={apply}>
+              Apply
+            </button>
+          </>
+        )
+      }
+    >
+      {step === "pick" ? (
+        <MonthGrid
+          month={month}
+          today={t}
+          weekStartsOn={weekStartsOn}
+          selected={day}
+          status={(d) => dayStatus(ix, d)}
+          disabled={(d) => d < t}
+          onSelect={(d) => {
+            setDay(d);
+            setStep("confirm");
+          }}
+          onMonthChange={setMonth}
+        />
+      ) : (
+        <div className="stack-v">
+          <div>
+            <strong>{formatLongDay(day)}</strong>
+          </div>
+          {prepared ? (
+            <p className="muted">This day is already prepared.</p>
+          ) : preview.rules.length === 0 ? (
+            <p className="muted">No matching rule for this day.</p>
+          ) : (
+            <>
+              <div className="muted small">{preview.rules.map((r) => r.name).join(", ")}</div>
+              <div className="prepare-preview">
+                {preview.items.map((it, i) => (
+                  <div key={`${it.id}-${i}`} className={`recurring-preview type-${it.type}`}>
+                    {it.type === "task" && <span className="checkbox" />}
+                    <span className="ellipsis">{it.text || "Untitled"}</span>
+                  </div>
+                ))}
+                {!preview.items.length && <p className="muted">The matching rules have no templates to copy.</p>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </Modal>
   );
 }

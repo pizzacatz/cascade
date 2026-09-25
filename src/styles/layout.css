@@ -657,51 +657,6 @@
 .day-picker .column-header {
   padding: 0 6px;
 }
-.picker-grid {
-  display: grid;
-  gap: 2px;
-  padding: 10px;
-}
-.picker-head,
-.picker-week {
-  text-align: center;
-  font-size: 11px;
-  height: 24px;
-  line-height: 24px;
-}
-.picker-day {
-  position: relative;
-  height: 32px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  cursor: pointer;
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-}
-.picker-day:hover {
-  background: var(--surface-2);
-}
-.picker-day.is-other {
-  color: var(--text-faint);
-}
-.picker-day.is-in-view {
-  background: var(--accent-softer);
-}
-.picker-day.is-today {
-  color: var(--accent);
-  font-weight: 700;
-}
-.picker-dot {
-  position: absolute;
-  bottom: 4px;
-  left: 50%;
-  width: 4px;
-  height: 4px;
-  margin-left: -2px;
-  border-radius: 50%;
-  background: var(--text-faint);
-}
 .picker-foot {
   padding: 0 10px;
 }
@@ -1317,4 +1272,179 @@ button.date-chip:hover {
 }
 .column-title.has-color {
   color: var(--c);
+}
+
+.month-grid {
+  padding: 8px 10px;
+}
+.month-grid-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.month-grid-title {
+  font-weight: 600;
+}
+.month-grid-days {
+  display: grid;
+  gap: 2px;
+}
+.month-grid-dow,
+.month-grid-week {
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  font-size: 11px;
+}
+.month-grid-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+.month-grid-day:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.month-grid-day:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.month-grid-day.is-other {
+  color: var(--text-faint);
+}
+.month-grid-day.is-in-range {
+  background: var(--accent-softer);
+}
+.month-grid-day.is-today {
+  color: var(--accent);
+  font-weight: 700;
+}
+.month-grid-day.is-selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.month-grid-day[data-drop="1"] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.month-grid-bar {
+  width: 60%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.month-grid-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+.month-grid-bar.is-done > span {
+  background: var(--success);
+}
+.month-grid-bar.is-open > span {
+  background: var(--danger);
+}
+.month-grid-bar.is-future > span {
+  background: var(--text-faint);
+}
+.day-warning {
+  color: var(--item-color-orange);
+}
+.recurring-block {
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-strong);
+}
+.recurring-divider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.recurring-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  padding: 3px 10px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.recurring-preview .checkbox {
+  margin-top: 0;
+  opacity: 0.6;
+}
+.recurring-preview.type-heading {
+  font-weight: 650;
+}
+.recurring-prepare {
+  margin: 8px 10px 0;
+}
+.recurring-prepared {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  font-size: 12px;
+  color: var(--success);
+}
+
+.stack-compact {
+  position: relative;
+}
+.stack-compact-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: grab;
+}
+.stack-compact-main .stack-current-text,
+.stack-compact-main .stack-message {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stack-timebar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+  transition: width 0.5s linear;
+}
+.stack-timebar.is-break,
+.stack-progress-bar.is-break {
+  background: var(--success);
+}
+.stack-timebar.is-over {
+  background: var(--danger);
+}
+.stack-message {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.stack-message.is-break {
+  color: var(--success);
 }

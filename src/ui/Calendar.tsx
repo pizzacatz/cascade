@@ -1,23 +1,23 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, MoreHorizontal, CalendarCheck, CalendarDays } from "lucide-react";
-import { itemsOnDay } from "../model/tree";
+import { ChevronLeft, ChevronRight, MoreHorizontal, CalendarCheck, CalendarDays, AlertTriangle, Repeat } from "lucide-react";
+import type { Item } from "../model/types";
+import { childrenOf, itemsOnDay } from "../model/tree";
 import {
   addDays,
   addMonths,
   formatMonth,
   formatShortDay,
-  isoWeek,
-  parseDay,
   relativeDayLabel,
   startOfMonth,
-  startOfWeek,
-  toDayKey,
 } from "../model/dates";
 import { rulesForDay } from "../model/recurrence";
 import { get, useApp } from "../state/store";
 import { indexOf, today } from "../state/derived";
 import { calendarDays, setCalendarAnchor, setVisibleDayCount, shiftCalendar, toggleDayPicker } from "../state/nav";
 import { exitEdit } from "../state/items";
+import { prepareDayWithToast } from "../state/config";
+import { ProgressRing } from "./ProgressRing";
+import { MonthGrid, dayStatus } from "./MonthGrid";
 import { CreateRow, EditFooter } from "./CreateRow";
 import { openOverlay } from "../state/overlays";
 import { ItemRow } from "./ItemRow";
@@ -90,8 +90,24 @@ function DayColumn({ date, width }: { date: string; width: number }) {
   const items = itemsOnDay(ix, date);
   const t = today();
   const rel = relativeDayLabel(date, t);
-  const hasRules = !!doc && rulesForDay(doc.config.recurrenceRules, date).length > 0;
   const past = date < t;
+  const rules = doc ? rulesForDay(doc.config.recurrenceRules, date) : [];
+  const broken = rules.filter((r) => r.templates.some((id) => ix.items[id]?.type !== "template"));
+  // What preparing this day would create (template contents), shown greyed.
+  const preview =
+    !past && !prepared
+      ? rules.flatMap((r) =>
+          r.templates
+            .map((id) => ix.items[id])
+            .filter((x): x is Item => !!x && x.type === "template")
+            .flatMap((tpl) => {
+              const kids = childrenOf(ix, tpl.id);
+              return kids.length ? kids : [tpl];
+            }),
+        )
+      : [];
+  const tasks = items.filter((i) => i.type === "task");
+  const progress = tasks.length ? tasks.filter((i) => i.finished).length / tasks.length : -1;
 
   const openMenu = (x: number, y: number) =>
     openOverlay({ kind: "context", x, y, target: { type: "surface", view: "calendar", date } });
@@ -109,9 +125,18 @@ function DayColumn({ date, width }: { date: string; width: number }) {
           {rel && <strong>{rel} · </strong>}
           {formatShortDay(date)}
         </span>
-        {hasRules && !past && (
-          <span className={`prepared-badge ${prepared ? "is-prepared" : ""}`} title={prepared ? "Recurring tasks prepared" : "Recurring tasks can be prepared"}>
-            <CalendarCheck size={13} />
+        {broken.length > 0 && (
+          <button
+            className="btn btn-ghost btn-sm btn-icon day-warning"
+            title={`Recurring rule "${broken[0].name}" refers to a missing template — open its settings`}
+            onClick={() => openOverlay({ kind: "docSettings", tab: "recurrence" })}
+          >
+            <AlertTriangle size={14} />
+          </button>
+        )}
+        {progress >= 0 && (
+          <span className="column-progress" title={`${Math.round(progress * 100)} %`}>
+            <ProgressRing value={progress} size={14} />
           </span>
         )}
         <button
@@ -142,86 +167,68 @@ function DayColumn({ date, width }: { date: string; width: number }) {
         ))}
         {!busy && <CreateRow target={{ view: "calendar", date }} focused={isTarget} hint={null} />}
         {editingHere && <EditFooter allowChild={false} />}
+        {rules.length > 0 && !past && (
+          <div className="recurring-block">
+            <div className="recurring-divider">
+              <Repeat size={12} />
+              <span className="ellipsis">{rules.map((r) => r.name).join(", ")}</span>
+            </div>
+            {prepared ? (
+              <div className="recurring-prepared">
+                <CalendarCheck size={13} /> Prepared
+              </div>
+            ) : (
+              <>
+                {preview.map((it, i) => (
+                  <div key={`${it.id}-${i}`} className={`recurring-preview type-${it.type}`}>
+                    {it.type === "task" && <span className="checkbox" />}
+                    <span className="ellipsis">{it.text || "Untitled"}</span>
+                  </div>
+                ))}
+                <button className="btn btn-sm recurring-prepare" onClick={() => prepareDayWithToast(date)}>
+                  <CalendarCheck size={13} /> Prepare recurring tasks
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
 function DayPicker({ width, anchor, dayCount }: { width: number; anchor: string; dayCount: number }) {
-  const [month, setMonth] = useState(startOfMonth(anchor));
   const weekStartsOn = useApp((s) => s.prefs.weekStartsOn);
   const showWeek = useApp((s) => s.prefs.showWeekNumber);
-  const byDay = useApp((s) => indexOf(s.doc).byDay);
+  const doc = useApp((s) => s.doc);
+  const dropDate = useApp((s) => (s.drag?.status === "active" && s.drag.target?.kind === "day-end" ? s.drag.target.date : null));
+  const ix = indexOf(doc);
   const t = today();
-  const first = startOfWeek(month, weekStartsOn);
-  const weeks: string[][] = [];
-  for (let w = 0; w < 6; w++) weeks.push(Array.from({ length: 7 }, (_, i) => addDays(first, w * 7 + i)));
-  const order = weekStartsOn === "monday" ? [1, 2, 3, 4, 5, 6, 0] : [0, 1, 2, 3, 4, 5, 6];
   const visibleEnd = addDays(anchor, dayCount - 1);
-
+  const away = t < anchor || t > visibleEnd;
   return (
     <div className="column day-picker" style={{ width }}>
-      <header className="column-header">
-        <button className="btn btn-ghost btn-sm btn-icon" aria-label="Previous month" onClick={() => setMonth(addMonths(month, -1))}>
-          <ChevronLeft size={15} />
-        </button>
-        <span className="column-title centered">{formatMonth(month)}</span>
-        <button className="btn btn-ghost btn-sm btn-icon" aria-label="Next month" onClick={() => setMonth(addMonths(month, 1))}>
-          <ChevronRight size={15} />
-        </button>
-      </header>
-      <div className="picker-grid" style={{ gridTemplateColumns: `${showWeek ? "28px " : ""}repeat(7, 1fr)` }}>
-        {showWeek && <span className="picker-head faint">Wk</span>}
-        {order.map((d, i) => (
-          <span key={i} className="picker-head faint">
-            {WEEKDAY_LETTERS[d]}
-          </span>
-        ))}
-        {weeks.map((week) => (
-          <Week key={week[0]} week={week} month={month} showWeek={showWeek} t={t} anchor={anchor} visibleEnd={visibleEnd} byDay={byDay} />
-        ))}
-      </div>
-      <div className="picker-foot">
-        <button className="btn btn-sm" onClick={() => { setMonth(startOfMonth(t)); setCalendarAnchor(t); }}>
-          Today
-        </button>
-      </div>
+      <MonthGrid
+        month={anchor}
+        today={t}
+        weekStartsOn={weekStartsOn}
+        showWeekNumbers={showWeek}
+        inRange={(d) => d >= anchor && d <= visibleEnd}
+        status={(d) => dayStatus(ix, d)}
+        onSelect={(d) => setCalendarAnchor(d)}
+        // The picker follows the strip: changing month moves the whole calendar.
+        onMonthChange={(m) => setCalendarAnchor(m < startOfMonth(anchor) ? addMonths(anchor, -1) : addMonths(anchor, 1))}
+        dayProps={(d) => ({ "data-day-picker": d, ...(d === dropDate ? { "data-drop": "1" } : {}) })}
+        footer={
+          away ? (
+            <div className="picker-foot">
+              <button className="btn btn-sm" onClick={() => setCalendarAnchor(t)}>
+                Today
+              </button>
+            </div>
+          ) : null
+        }
+      />
     </div>
-  );
-}
-
-function Week(props: {
-  week: string[];
-  month: string;
-  showWeek: boolean;
-  t: string;
-  anchor: string;
-  visibleEnd: string;
-  byDay: Map<string, unknown[]>;
-}) {
-  const { week, month, showWeek, t, anchor, visibleEnd, byDay } = props;
-  return (
-    <>
-      {showWeek && <span className="picker-week faint">{isoWeek(week[0])}</span>}
-      {week.map((d) => {
-        const inMonth = d.slice(0, 7) === month.slice(0, 7);
-        const inView = d >= anchor && d <= visibleEnd;
-        const count = byDay.get(d)?.length ?? 0;
-        return (
-          <button
-            key={d}
-            className={`picker-day ${inMonth ? "" : "is-other"} ${d === t ? "is-today" : ""} ${inView ? "is-in-view" : ""}`}
-            onClick={() => setCalendarAnchor(d)}
-            data-day-picker={d}
-            title={toDayKey(parseDay(d))}
-          >
-            {Number(d.slice(8))}
-            {count > 0 && <span className="picker-dot" />}
-          </button>
-        );
-      })}
-    </>
   );
 }

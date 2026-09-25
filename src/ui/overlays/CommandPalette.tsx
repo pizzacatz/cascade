@@ -164,7 +164,7 @@ function rootItems(s: AppState): PItem[] {
       { id: "template-here", label: "Insert template…", icon: <BookmarkCheck size={15} />, hint: keyLabel("template"), run: () => openOverlay({ kind: "template", target: date ? { date } : { parentId: parentId! } }) },
       { id: "print-col", label: `Print current ${cal ? "day" : "column"}`, icon: <Printer size={15} />, run: () => openPrint(date ? { kind: "day", date } : { kind: "column", parentId: parentId! }) },
       { id: "stack-col", label: `Launch stack on current ${cal ? "day" : "column"}`, icon: <Layers size={15} />, run: () => openStack(date ? { kind: "day", date } : { kind: "column", parentId: parentId! }) },
-      ...(date && date >= today() ? [{ id: "prepare-day", label: "Prepare recurring tasks for this day", icon: <CalendarCheck size={15} />, run: () => prepareDayWithToast(date) }] : []),
+      ...(date && date >= today() ? [{ id: "prepare-day", label: "Prepare recurring tasks for this day", icon: <CalendarCheck size={15} />, run: () => openOverlay({ kind: "prepare", date }) }] : []),
       { id: "trash-finished-col", label: "Trash finished items in this column", icon: <ListX size={15} />, run: () => trashFinished(scope) },
       ...SORTS.map(([k, label]) => ({ id: `sort-${k}`, label: `Sort: ${label}`, icon: <ArrowUpDown size={15} />, keywords: "sort order clean", run: () => sortColumn(scope, k) })),
     ]);
@@ -216,7 +216,7 @@ function rootItems(s: AppState): PItem[] {
       ? [
           { id: "search", label: "Search items…", icon: <Search size={15} />, hint: keyLabel("search"), page: "search" as const, keywords: "find" },
           { id: "doc-settings", label: "Document settings", icon: <Settings2 size={15} />, hint: keyLabel("doc-settings"), keywords: "spaces tags formatting recurrence rules progression", run: () => openOverlay({ kind: "docSettings", tab: "general" }) },
-          { id: "prepare", label: "Prepare recurring tasks…", icon: <CalendarCheck size={15} />, page: "prepare" as const },
+          { id: "prepare", label: "Prepare recurring tasks…", icon: <CalendarCheck size={15} />, run: () => openOverlay({ kind: "prepare" }) },
           { id: "remove-empty", label: "Remove empty items", icon: <Eraser size={15} />, run: removeEmptyItems },
           { id: "trash-finished", label: "Trash all finished items", icon: <ListX size={15} />, run: () => trashFinished() },
           { id: "close-file", label: "Close document", icon: <XIcon size={15} />, hint: keyLabel("close-file"), run: () => void closeDocument() },

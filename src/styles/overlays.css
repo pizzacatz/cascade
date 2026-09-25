@@ -568,3 +568,35 @@ input[type="range"] {
   color: var(--accent);
   background: var(--accent-softer);
 }
+
+.prepare-preview {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.stack-preview {
+  margin-top: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 0;
+}
+.stack-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  font-size: 13px;
+}
+.stack-preview-row .checkbox {
+  margin-top: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.stack-preview-row .faint {
+  max-width: 45%;
+}

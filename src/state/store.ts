@@ -61,7 +61,8 @@ export type Overlay =
   | { kind: "stack"; scope: PrintScopeRef }
   | { kind: "template"; target: { parentId: string } | { date: string } }
   | { kind: "debug"; tab: "speed" | "drag" | "state" }
-  | { kind: "about" };
+  | { kind: "about" }
+  | { kind: "prepare"; date?: string };
 
 export type CreateTarget = { view: "columns"; parentId: string } | { view: "calendar"; date: string };
 
