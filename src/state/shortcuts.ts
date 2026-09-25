@@ -84,8 +84,8 @@ export const BINDINGS: Binding[] = [
   { id: "duplicate", keys: "ctrl+d", contexts: SEL, description: "Duplicate", category: "editing", help: true, run: duplicateSelection },
   // Creation
   { id: "create-root", keys: "enter", contexts: ["none", "create-target"], description: "Create an item here", category: "creation", help: true, run: () => createInCurrentColumn() },
-  { id: "create-sibling", keys: "shift+enter", contexts: NAV, description: "New item below", category: "creation", help: true, run: () => createSibling() },
-  { id: "create-child", keys: "ctrl+enter", contexts: SEL, description: "New child item (turns the item into a folder)", category: "creation", help: true, run: () => createChild() },
+  { id: "create-sibling", keys: "shift+enter", contexts: NAV, description: "Add item below", category: "creation", help: true, run: () => createSibling() },
+  { id: "create-child", keys: "ctrl+enter", contexts: SEL, description: "Add child item (a task becomes a folder)", category: "creation", help: true, run: () => createChild() },
   // Selection & navigation
   { id: "nav-up", keys: "arrowup", contexts: NAV, description: "Select previous", category: "navigation", run: () => navigateVertical(-1) },
   { id: "nav-down", keys: "arrowdown", contexts: NAV, description: "Select next", category: "navigation", run: () => navigateVertical(1) },

@@ -40,6 +40,7 @@ import {
   CalendarX,
   Undo2,
   Redo2,
+  Keyboard,
 } from "lucide-react";
 import type { Color, Item, ItemType } from "../../model/types";
 import { COLORS, ITEM_TYPES, TRASH_SPACE_ID, isContainerType, isTaggableType } from "../../model/types";
@@ -66,6 +67,7 @@ import {
   addTag,
   trashFinished,
   flushEdit,
+  createSibling,
 } from "../../state/items";
 import { copyWithToast, cutSelection } from "../../state/clipboard";
 import { closeDocument, newDocument, openDialog, openPath, clearRecentFiles, fromStoredPath } from "../../state/files";
@@ -131,6 +133,10 @@ function rootItems(s: AppState): PItem[] {
     const n = items.length;
     const what = n === 1 ? `“${(items[0].text || "item").slice(0, 40)}”` : `${n} items`;
     push(`Selection · ${what}`, [
+      ...(n === 1 && items[0].parentId && items[0].type !== "separator"
+        ? [{ id: "add-child", label: "Add child item", icon: <Plus size={15} />, hint: keyLabel("create-child"), keywords: "subtask nest new", run: () => addItem("task", { view: "columns", parentId: items[0].id }) }]
+        : []),
+      { id: "add-below", label: "Add item below", icon: <Plus size={15} />, hint: keyLabel("create-sibling"), keywords: "new sibling", run: () => createSibling() },
       { id: "toggle-status", label: "Toggle finished", icon: <CheckSquare size={15} />, hint: keyLabel("toggle-finished"), run: () => toggleFinished(sel) },
       { id: "types", label: "Turn into…", icon: <Shapes size={15} />, page: "types", keywords: "type convert task heading folder text separator template" },
       { id: "colors", label: "Color…", icon: <Palette size={15} />, page: "colors", keywords: "colour" },
@@ -222,6 +228,7 @@ function rootItems(s: AppState): PItem[] {
   push("Application", [
     { id: "settings", label: "Application settings", icon: <Settings size={15} />, hint: keyLabel("settings"), keywords: "preferences theme triggers", run: () => openOverlay({ kind: "appSettings", tab: "general" }) },
     { id: "print-settings", label: "Print settings", icon: <Printer size={15} />, keywords: "printer receipt thermal bluetooth mqtt", run: () => openOverlay({ kind: "printSettings" }) },
+    { id: "shortcuts", label: "Keyboard shortcuts", icon: <Keyboard size={15} />, keywords: "hotkeys keys help reference", run: () => updatePrefs({ showHelp: true }) },
     { id: "toggle-help", label: "Toggle help panel", icon: <HelpCircle size={15} />, hint: "F1", run: () => updatePrefs({ showHelp: !s.prefs.showHelp }) },
     { id: "toggle-headers", label: "Toggle column headers", icon: <PanelTop size={15} />, run: () => updatePrefs({ hideColumnHeaders: !s.prefs.hideColumnHeaders }) },
     { id: "toggle-toolbar", label: "Toggle toolbar", icon: <PanelTop size={15} />, run: () => updatePrefs({ hideFloatingActionMenu: !s.prefs.hideFloatingActionMenu }) },

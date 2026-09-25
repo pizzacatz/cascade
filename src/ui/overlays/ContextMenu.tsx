@@ -1,5 +1,8 @@
 import {
   Pencil,
+  CornerDownRight,
+  ArrowDownToLine,
+  ArrowUpToLine,
   CheckSquare,
   Copy,
   Scissors,
@@ -24,8 +27,8 @@ import {
   ListX,
   Settings2,
 } from "lucide-react";
-import { COLORS, ITEM_TYPES, TRASH_SPACE_ID, isContainerType, isTaggableType, type Color, type ItemType } from "../../model/types";
-import { isUserSpace } from "../../model/tree";
+import { COLORS, ITEM_TYPES, TRASH_SPACE_ID, childPolicy, isContainerType, isTaggableType, type Color, type ItemType } from "../../model/types";
+import { childrenOf, isUserSpace, itemsOnDay } from "../../model/tree";
 import { get, type ContextTarget, type PrintScopeRef } from "../../state/store";
 import { indexOf, selectionOf, today } from "../../state/derived";
 import { enterEdit, selectColumnItem } from "../../state/nav";
@@ -104,6 +107,15 @@ function itemEntries(itemId: string, view: "columns" | "calendar"): MenuEntry[] 
 
   return [
     { label: "Edit", icon: <Pencil size={14} />, hint: keyLabel("edit"), disabled: it.type === "separator" || ids.length > 1, run: () => { selectColumnOrCal(itemId, view); enterEdit(itemId); } },
+    {
+      label: "Add child item",
+      icon: <CornerDownRight size={14} />,
+      hint: keyLabel("create-child"),
+      disabled: childPolicy(it.type) === "blocked" || !it.parentId,
+      run: () => addItem("task", { view: "columns", parentId: itemId }),
+    },
+    { label: "Add item below", icon: <ArrowDownToLine size={14} />, hint: keyLabel("create-sibling"), run: () => addNear(itemId, view, "below") },
+    { label: "Add item above", icon: <ArrowUpToLine size={14} />, run: () => addNear(itemId, view, "above") },
     { label: "Toggle finished", icon: <CheckSquare size={14} />, hint: keyLabel("toggle-finished"), disabled: !anyTask, run: () => toggleFinished(ids) },
     { separator: true },
     {
@@ -163,6 +175,22 @@ function isInTrashId(id: string): boolean {
     cur = ix.items[cur]?.parentId ?? null;
   }
   return false;
+}
+
+/** Create a task right below or above an item, in the same column (or day). */
+function addNear(itemId: string, view: "columns" | "calendar", where: "below" | "above") {
+  const ix = indexOf(get().doc);
+  const it = ix.items[itemId];
+  if (!it) return;
+  if (view === "calendar" && it.scheduleDate) {
+    const day = itemsOnDay(ix, it.scheduleDate);
+    const i = day.findIndex((x) => x.id === itemId);
+    addItem("task", { view: "calendar", date: it.scheduleDate, afterId: where === "below" ? itemId : i > 0 ? day[i - 1].id : null });
+  } else if (it.parentId) {
+    const sibs = childrenOf(ix, it.parentId);
+    const i = sibs.findIndex((x) => x.id === itemId);
+    addItem("task", { view: "columns", parentId: it.parentId, afterId: where === "below" ? itemId : i > 0 ? sibs[i - 1].id : null });
+  }
 }
 
 function selectColumnOrCal(id: string, view: "columns" | "calendar") {
