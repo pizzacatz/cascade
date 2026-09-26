@@ -9,7 +9,8 @@ rust-version = "1.77"
 
 [lib]
 name = "cascade_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Desktop only: the staticlib/cdylib outputs are for Tauri mobile builds.
+crate-type = ["rlib"]
 
 [[bin]]
 name = "cascade"

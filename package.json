@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
-    "build:cli": "vite build -c vite.cli.config.ts && chmod +x dist-cli/cascade-cli.mjs"
+    "build:cli": "vite build -c vite.cli.config.ts && chmod +x dist-cli/cascade-cli.mjs",
+    "build:appimage": "tauri build --bundles appimage && node -e \"require('fs').rmSync('src-tauri/target/release/bundle/appimage/Cascade.AppDir', { recursive: true, force: true })\""
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
