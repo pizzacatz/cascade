@@ -22,6 +22,8 @@ const MOUSE: [string, string][] = [
   ["Drag", "Move (top/bottom edge: before/after, middle: into)"],
   ["Ctrl+drag", "Duplicate instead of moving"],
   ["Drag onto a toolbar chip", "Apply that type, color or tag"],
+  ["Drag a folder onto a day", "Date it and its unfinished items (Alt on release: the folder only)"],
+  ["Drag onto the month name", "Opens the day picker so you can drop on any day"],
   ["Right-click", "Item, column or space menu"],
 ];
 
@@ -65,6 +67,7 @@ const EDITOR_KEYS: [string, string][] = [
   ["#", "At the start: turn into a heading"],
   ["---", "Whole text: turn into a separator"],
   ["::", "Open the inline command menu"],
+  ["@tomorrow, @fri, @dec 5", "At the end: schedule on that day (@none removes the date)"],
 ];
 
 const CATEGORY_LABEL: Record<Category, string> = {

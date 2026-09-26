@@ -38,6 +38,7 @@ btleplug = "0.13"
 rumqttc = { version = "0.25", default-features = false, features = ["use-rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-native-certs = "0.8"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"

@@ -15,6 +15,8 @@ import {
   stopStack,
   timerState,
 } from "../state/stack";
+import { remoteStackAvailable } from "../state/remoteStack";
+import { RemoteStackButton } from "./RemoteStackButton";
 
 function useNow(active: boolean) {
   const [now, setNow] = useState(Date.now());
@@ -69,6 +71,7 @@ export function StackRunner({ compact = false }: { compact?: boolean }) {
           {st.pausedAt ? <Play size={14} /> : <Pause size={14} />}
         </button>
       )}
+      {remoteStackAvailable && <RemoteStackButton compact={compact} />}
       <button className="btn btn-ghost btn-sm btn-icon" aria-label={compact ? "Expand" : "Compact runner"} title={compact ? "Back to the full window" : "Compact always-on-top runner"} onClick={() => void setCompact(!compact)}>
         {compact ? <Maximize2 size={13} /> : <Minimize2 size={14} />}
       </button>

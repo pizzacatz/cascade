@@ -9,6 +9,9 @@ import { get, set, useApp } from "../state/store";
 import { indexOf } from "../state/derived";
 import { enterEdit, selectColumnItem, updateDraft, selectCalendarItem } from "../state/nav";
 import { MAX_TEXT_LENGTH, convertEditedItem, createFromEdit, createSibling, exitEdit, flushEdit } from "../state/items";
+import { splitTypedDate } from "../state/schedule";
+import { formatShortDay, relativeDayLabel, todayKey } from "../model/dates";
+import { CalendarDays } from "lucide-react";
 
 function placeCaret(el: HTMLElement, caret: "start" | "end" | number) {
   const sel = window.getSelection();
@@ -205,23 +208,40 @@ export function ItemEditor({ item, view, className }: { item: Item; view: "colum
   };
 
   return (
-    <div
-      ref={ref}
-      className={`item-editor ${className ?? ""}`}
-      contentEditable="plaintext-only"
-      suppressContentEditableWarning
-      spellCheck={false}
-      autoCorrect="off"
-      autoCapitalize="off"
-      role="textbox"
-      aria-label="Item text"
-      onInput={onInput}
-      onKeyDown={onKeyDown}
-      onBlur={onBlur}
-      onPaste={onPaste}
-      onMouseDown={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
-    />
+    <>
+      <div
+        ref={ref}
+        className={`item-editor ${className ?? ""}`}
+        contentEditable="plaintext-only"
+        suppressContentEditableWarning
+        spellCheck={false}
+        autoCorrect="off"
+        autoCapitalize="off"
+        role="textbox"
+        aria-label="Item text"
+        onInput={onInput}
+        onKeyDown={onKeyDown}
+        onBlur={onBlur}
+        onPaste={onPaste}
+        onMouseDown={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+      />
+      <TypedDateHint itemId={item.id} />
+    </>
+  );
+}
+
+/** Shows what a trailing "@date" will do when the edit is committed. */
+function TypedDateHint({ itemId }: { itemId: string }) {
+  const draft = useApp((s) => (s.edit?.itemId === itemId ? s.edit.draft : ""));
+  const weekStartsOn = useApp((s) => s.prefs.weekStartsOn);
+  const found = draft.includes("@") ? splitTypedDate(draft, todayKey(), weekStartsOn) : null;
+  if (!found) return null;
+  return (
+    <span className="typed-date-hint" title="Scheduled when you finish editing">
+      <CalendarDays size={11} />
+      {found.date ? (relativeDayLabel(found.date) ?? formatShortDay(found.date)) : "No date"}
+    </span>
   );
 }
 

@@ -11,7 +11,7 @@ import type {
   Space,
   Tag,
 } from "../model/types";
-import { ROOT_SPACE_ID, TRASH_SPACE_ID, isContainerType } from "../model/types";
+import { ROOT_SPACE_ID, TRASH_SPACE_ID, TREE_SPACE_ID, isContainerType } from "../model/types";
 import { newId } from "../model/defaults";
 import { keyAfter, keyBetween } from "../model/order";
 import { childrenOf, isUserSpace, itemsOnDay, sortSpaces } from "../model/tree";
@@ -26,7 +26,7 @@ import { switchSpace } from "./nav";
 // Spaces
 // ---------------------------------------------------------------------------
 
-export function createSpace(name = "New space", icon = "folder", color: Color = "default"): string | null {
+export function createSpace(name = "New space", icon = "folder", color: Color = "default", opts: { open?: boolean } = {}): string | null {
   const s = get();
   if (!s.doc) return null;
   const spaces = sortSpaces(s.doc.config.spaces);
@@ -46,7 +46,7 @@ export function createSpace(name = "New space", icon = "folder", color: Color = 
   transact("New space", (d) => {
     d.config.spaces.push(space);
   });
-  switchSpace(id);
+  if (opts.open !== false) switchSpace(id);
   return id;
 }
 
@@ -81,12 +81,32 @@ export function moveSpace(id: string, delta: -1 | 1): void {
   });
 }
 
-export function duplicateSpace(id: string): void {
+/**
+ * Place an active space at an index of the visible (non-archived, non-tree)
+ * space list, as drag-to-reorder does. Trash keeps its own position.
+ */
+export function placeSpace(id: string, index: number): void {
   const s = get();
   if (!s.doc) return;
+  const list = sortSpaces(s.doc.config.spaces).filter((x) => !x.archived && x.id !== TREE_SPACE_ID);
+  const from = list.findIndex((x) => x.id === id);
+  if (from < 0) return;
+  const others = list.filter((x) => x.id !== id);
+  const to = Math.max(0, Math.min(index > from ? index - 1 : index, others.length));
+  if (to === from) return;
+  const pos = keyBetween(others[to - 1]?.position ?? null, others[to]?.position ?? null);
+  transact("Reorder spaces", (d) => {
+    const sp = d.config.spaces.find((x) => x.id === id);
+    if (sp) sp.position = pos;
+  });
+}
+
+export function duplicateSpace(id: string, opts: { open?: boolean } = {}): string | null {
+  const s = get();
+  if (!s.doc) return null;
   const ix = indexOf(s.doc);
   const src = s.doc.config.spaces.find((x) => x.id === id);
-  if (!src || id === TRASH_SPACE_ID) return;
+  if (!src || id === TRASH_SPACE_ID) return null;
   const spaces = sortSpaces(s.doc.config.spaces);
   const i = spaces.findIndex((x) => x.id === id);
   const newSpace: Space = {
@@ -104,7 +124,8 @@ export function duplicateSpace(id: string): void {
       c.schedulePosition = null;
     });
   });
-  switchSpace(newSpace.id);
+  if (opts.open !== false) switchSpace(newSpace.id);
+  return newSpace.id;
 }
 
 /** Delete a user space: its items move to Trash; rules referencing it lose those conditions. */
@@ -194,6 +215,39 @@ export function moveTag(id: string, delta: -1 | 1): void {
     const t = d.config.tags.find((x) => x.id === id);
     if (t) t.priority = p;
   });
+}
+
+/** Place a tag at an index of the ordered tag list (drag-to-reorder). */
+export function placeTag(id: string, index: number): void {
+  const s = get();
+  if (!s.doc) return;
+  const list = sortRules(s.doc.config.tags);
+  const from = list.findIndex((x) => x.id === id);
+  if (from < 0) return;
+  const others = list.filter((x) => x.id !== id);
+  const to = Math.max(0, Math.min(index > from ? index - 1 : index, others.length));
+  if (to === from) return;
+  const p = keyBetween(others[to - 1]?.priority ?? null, others[to]?.priority ?? null);
+  transact("Reorder tags", (d) => {
+    const t = d.config.tags.find((x) => x.id === id);
+    if (t) t.priority = p;
+  });
+}
+
+/** Duplicate a tag right after the original. */
+export function duplicateTag(id: string): string | null {
+  const s = get();
+  if (!s.doc) return null;
+  const list = sortRules(s.doc.config.tags);
+  const i = list.findIndex((x) => x.id === id);
+  if (i < 0) return null;
+  const src = list[i];
+  const nid = newId();
+  const priority = keyBetween(src.priority, list[i + 1]?.priority ?? null);
+  transact("Duplicate tag", (d) => {
+    d.config.tags.push({ id: nid, name: `${src.name} copy`, color: src.color, icon: src.icon, priority });
+  });
+  return nid;
 }
 
 // ---------------------------------------------------------------------------

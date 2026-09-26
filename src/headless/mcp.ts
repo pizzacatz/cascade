@@ -14,7 +14,9 @@ Folders hold child items and open as columns; tasks can be finished; items can b
 Refer to items by id (preferred, from list/search results), exact text, or a path like "Home/Work/Launch".
 Parents can be a space name, a folder id or name, or a path. Dates: YYYY-MM-DD, today, tomorrow, +N.
 Adding a child under a task turns that task into a folder. Deleting moves items to Trash unless permanent.
-Changes are saved immediately; the Cascade app reloads the file automatically if it is open.`;
+Changes are saved immediately; the Cascade app reloads the file automatically if it is open.
+Before edits the document is backed up (at most every 2 minutes); list_backups / restore_backup undo mistakes.
+Dating a folder also dates its unfinished child tasks and folders that had no date or the folder's old date.`;
 
 export async function startMcpServer(defaultFile?: string): Promise<void> {
   const server = new McpServer({ name: "cascade", version: "0.1.0" }, { instructions: INSTRUCTIONS });
@@ -97,11 +99,41 @@ export async function startMcpServer(defaultFile?: string): Promise<void> {
     "get_agenda",
     {
       title: "Get agenda",
-      description: "Items scheduled on a calendar day; for today, also unfinished overdue tasks.",
-      inputSchema: { file: fileArg, date: z.string().optional().describe("YYYY-MM-DD, today, tomorrow, +N (default today)") },
+      description:
+        "Items scheduled per calendar day over a date range (default: today and the next 6 days), with each item's type, finished state and location. " +
+        "Also lists unfinished overdue work when the range includes today. Pass `date` alone for a single day.",
+      inputSchema: {
+        file: fileArg,
+        date: z.string().optional().describe("A single day: YYYY-MM-DD, today, tomorrow, +N"),
+        from: z.string().optional().describe("First day of the range (default today)"),
+        to: z.string().optional().describe("Last day of the range (inclusive)"),
+        days: z.number().int().min(1).max(366).optional().describe("Number of days when `to` is not given (default 7)"),
+      },
       annotations: { readOnlyHint: true },
     },
-    ({ file, date }) => read(file, () => core.agenda(date ?? "today")),
+    ({ file, date, from, to, days }) =>
+      read(file, () => (date && !from && !to && !days ? core.agendaRange({ from: date, to: date }) : core.agendaRange({ from, to, days }))),
+  );
+
+  server.registerTool(
+    "get_overdue",
+    {
+      title: "Get overdue work",
+      description: "Unfinished tasks, and folders that still contain unfinished tasks, scheduled before today (oldest first).",
+      inputSchema: { file: fileArg },
+      annotations: { readOnlyHint: true },
+    },
+    ({ file }) => read(file, core.overdue),
+  );
+
+  server.registerTool(
+    "roll_over",
+    {
+      title: "Roll over unfinished work",
+      description: "Move all unfinished work scheduled before a day onto that day (default today). Finished tasks stay where they were done.",
+      inputSchema: { file: fileArg, date: z.string().optional().describe("Target day (default today)") },
+    },
+    ({ file, date }) => write(file, () => core.rollOver(date ?? "today")),
   );
 
   server.registerTool(
@@ -242,6 +274,56 @@ export async function startMcpServer(defaultFile?: string): Promise<void> {
       inputSchema: { file: fileArg, date: z.string().describe("YYYY-MM-DD, today, tomorrow, +N") },
     },
     ({ file, date }) => write(file, () => core.prepare(date)),
+  );
+
+  server.registerTool(
+    "list_backups",
+    {
+      title: "List backups",
+      description: "Automatic backups of the document (newest first, ref 1 = newest) with time and item counts.",
+      inputSchema: { file: fileArg },
+      annotations: { readOnlyHint: true },
+    },
+    ({ file }) => {
+      try {
+        return ok(core.listDocBackups(fileOf(file)));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "restore_backup",
+    {
+      title: "Restore backup",
+      description: "Replace the document with one of its backups. The current content is backed up first, so this can itself be undone.",
+      inputSchema: { file: fileArg, backup: z.union([z.number().int().min(1), z.string()]).describe("1 = newest backup (from list_backups), or a backup id") },
+      annotations: { destructiveHint: true },
+    },
+    ({ file, backup }) => {
+      try {
+        return ok(core.restoreDocBackup(fileOf(file), backup));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "export_ics",
+    {
+      title: "Export calendar (.ics)",
+      description: "Write the document's dated tasks and folders as all-day events to an iCalendar file (default: next to the document).",
+      inputSchema: { file: fileArg, out: z.string().optional().describe("Output .ics path") },
+    },
+    ({ file, out }) => {
+      try {
+        return ok(core.exportIcs(fileOf(file), out));
+      } catch (e) {
+        return fail(e);
+      }
+    },
   );
 
   server.registerTool(

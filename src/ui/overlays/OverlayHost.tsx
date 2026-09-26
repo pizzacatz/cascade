@@ -6,6 +6,7 @@ import { AppSettings } from "./AppSettings";
 import { DocSettings } from "./DocSettings";
 import { PrintOverlay, PrintSettingsOverlay } from "./PrintOverlays";
 import { AboutOverlay, DebugOverlay, PrepareOverlay, StackOverlay, TemplateOverlay } from "./MiscOverlays";
+import { BackupsOverlay } from "./BackupsOverlay";
 
 export function OverlayHost() {
   const o = useApp((s) => s.overlay);
@@ -37,5 +38,7 @@ export function OverlayHost() {
       return <AboutOverlay />;
     case "prepare":
       return <PrepareOverlay date={o.date} />;
+    case "backups":
+      return <BackupsOverlay />;
   }
 }

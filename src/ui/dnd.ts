@@ -9,7 +9,7 @@ import type { Color, ItemType, ViewName } from "../model/types";
 import { childPolicy, isContainerType, isEditableType } from "../model/types";
 import { childrenOf, isAncestor, itemsOnDay, spaceOf } from "../model/tree";
 import { nodesFromItems } from "../model/outline";
-import { get, set, type DragState, type DropTarget, type PaletteDrag } from "../state/store";
+import { get, set, withoutDateCascade, type DragState, type DropTarget, type PaletteDrag } from "../state/store";
 import { indexOf, selectionOf } from "../state/derived";
 import {
   addItem,
@@ -134,7 +134,7 @@ function onMove(e: MouseEvent) {
     if (get().edit) return; // text selection inside the editor, not a drag
   }
   set({
-    drag: { ...d, status: "active", x: e.clientX, y: e.clientY, copy: e.ctrlKey, target: computeTarget(d, e.clientX, e.clientY) },
+    drag: { ...d, status: "active", x: e.clientX, y: e.clientY, copy: e.ctrlKey, alt: e.altKey, target: computeTarget(d, e.clientX, e.clientY) },
   });
 }
 
@@ -150,7 +150,11 @@ function onUp(e: MouseEvent) {
   lastDropAt = Date.now();
   e.preventDefault();
   const target = computeTarget(d, e.clientX, e.clientY);
-  if (target) performDrop({ ...d, copy: e.ctrlKey }, target);
+  if (!target) return;
+  const drop = () => performDrop({ ...d, copy: e.ctrlKey }, target);
+  // Alt on release: a dragged folder is dated (or moved) without its child items.
+  if (e.altKey) withoutDateCascade(drop);
+  else drop();
 }
 
 function onKey(e: KeyboardEvent) {
@@ -161,6 +165,12 @@ function onKey(e: KeyboardEvent) {
   } else if (e.key === "Control") {
     const d = get().drag;
     if (d?.status === "active") set({ drag: { ...d, copy: e.type === "keydown" } });
+  } else if (e.key === "Alt") {
+    const d = get().drag;
+    if (d?.status === "active") {
+      e.preventDefault(); // keep the webview's menu mnemonics out of the way
+      set({ drag: { ...d, alt: e.type === "keydown" } });
+    }
   }
 }
 

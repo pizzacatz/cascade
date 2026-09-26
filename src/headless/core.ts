@@ -30,6 +30,9 @@ import {
 } from "../state/items";
 import { createSpace, createTag, prepareDay as prepareDayOp, type PrepareResult } from "../state/config";
 import { DOC_TEMPLATES } from "../state/templates";
+import { overdueItems, rollOverOverdue } from "../state/schedule";
+import { buildIcs, exportableItems, icsPathFor } from "../model/ics";
+import * as backups from "./backups";
 
 export class CascadeError extends Error {}
 
@@ -37,13 +40,32 @@ export class CascadeError extends Error {}
 // Session: load → mutate → save
 // ---------------------------------------------------------------------------
 
-let current: { path: string; viewState?: ViewState } | null = null;
+let current: { path: string; text: string; viewState?: ViewState } | null = null;
+
+/**
+ * Back up a document before an outside edit unless one was taken recently, so
+ * a burst of agent edits leaves one restorable copy of the state before it
+ * (and does not push the app's older backups out of the rotation).
+ */
+export const BACKUP_MIN_GAP_MS = 2 * 60 * 1000;
+
+function backupBeforeWrite(path: string, text: string) {
+  try {
+    const newest = backups.listBackups(path)[0];
+    if (newest && Date.now() - newest.time < BACKUP_MIN_GAP_MS) return;
+    backups.writeBackup(path, text);
+  } catch (e) {
+    // A failed backup must not block the edit itself.
+    process.stderr.write(`cascade-cli: could not back up ${path}: ${(e as Error).message}\n`);
+  }
+}
 
 export function load(file: string): Doc {
   const path = resolve(file);
   if (!existsSync(path)) throw new CascadeError(`No such document: ${path}`);
-  const { doc } = parseDocument(readFileSync(path, "utf8"));
-  current = { path, viewState: doc.config.viewState };
+  const text = readFileSync(path, "utf8");
+  const { doc } = parseDocument(text);
+  current = { path, text, viewState: doc.config.viewState };
   set({
     doc,
     filePath: path,
@@ -65,9 +87,19 @@ export function save(): void {
     ? normalizeViewState(current.viewState, new Set(Object.keys(s.doc.items)), s.doc.config.spaces)
     : undefined;
   const text = serializeDocument({ ...s.doc, config: { ...s.doc.config, viewState: vs } });
-  const tmp = join(dirname(current.path), `.${pathBasename(current.path)}.${process.pid}.tmp`);
+  backupBeforeWrite(current.path, current.text);
+  writeAtomic(current.path, text);
+  current.text = text;
+  // An existing .ics copy next to the document (the app's "keep an .ics copy"
+  // setting) is kept up to date.
+  const ics = icsPathFor(current.path);
+  if (existsSync(ics)) writeAtomic(ics, buildIcs(s.doc, { name: pathBasename(current.path).replace(/\.col$/i, "") }));
+}
+
+function writeAtomic(path: string, text: string) {
+  const tmp = join(dirname(path), `.${pathBasename(path)}.${process.pid}.tmp`);
   writeFileSync(tmp, text, "utf8");
-  renameSync(tmp, current.path);
+  renameSync(tmp, path);
 }
 
 /** Run a mutation against a file and save it. */
@@ -416,6 +448,42 @@ export function agenda(date = "today"): { date: string; items: ItemInfo[]; overd
   return { date: day, items: itemsOnDay(x, day).map((i) => describe(i)), overdue: overdue.map((i) => describe(i)) };
 }
 
+export interface AgendaRange {
+  from: string;
+  to: string;
+  days: { date: string; items: ItemInfo[] }[];
+  /** Unfinished work scheduled before today (when the range includes today). */
+  overdue: ItemInfo[];
+}
+
+/** Items per day from `from` to `to` (default: today and the next 6 days). */
+export function agendaRange(o: { from?: string; to?: string; days?: number } = {}): AgendaRange {
+  const from = parseDate(o.from ?? "today");
+  let to = o.to ? parseDate(o.to) : addDays(from, Math.max(1, o.days ?? 7) - 1);
+  if (to < from) throw new CascadeError(`The range ends (${to}) before it starts (${from})`);
+  if (addDays(from, 366) < to) to = addDays(from, 366);
+  const x = ix();
+  const days: AgendaRange["days"] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    days.push({ date: d, items: itemsOnDay(x, d).filter((i) => spaceOf(x, i.id) !== TRASH_SPACE_ID).map((i) => describe(i)) });
+  }
+  const t = todayKey();
+  return { from, to, days, overdue: from <= t && t <= to ? overdue() : [] };
+}
+
+/** Unfinished tasks, and folders with unfinished tasks, scheduled before today. */
+export function overdue(): ItemInfo[] {
+  return overdueItems(todayKey()).map((i) => describe(i));
+}
+
+/** Move unfinished work scheduled before `date` (default today) onto `date`. */
+export function rollOver(date = "today"): { date: string; moved: ItemInfo[] } {
+  const day = parseDate(date);
+  const ids = overdueItems(day).map((i) => i.id);
+  rollOverOverdue(day, { quiet: true });
+  return { date: day, moved: ids.map((id) => describe(get().doc!.items[id])) };
+}
+
 export function listSpaces() {
   const d = get().doc!;
   return visibleSpaces(d.config.spaces).map((s) => ({
@@ -453,3 +521,60 @@ export function createDocument(file: string, template = "blank"): { path: string
 }
 
 export const TEMPLATE_IDS = DOC_TEMPLATES.map((t) => t.id);
+
+// ---------------------------------------------------------------------------
+// Backups and calendar export (operate on files directly)
+// ---------------------------------------------------------------------------
+
+export interface BackupListing {
+  path: string;
+  backups: { ref: number; id: string; time: string; size: number; items: number | null; tasks: number | null }[];
+}
+
+export function listDocBackups(file: string): BackupListing {
+  const path = resolve(file);
+  if (!existsSync(path)) throw new CascadeError(`No such document: ${path}`);
+  return {
+    path,
+    backups: backups.listBackups(path).map((b, i) => {
+      let items: number | null = null;
+      let tasks: number | null = null;
+      try {
+        const d = parseDocument(backups.readBackup(path, b.id)).doc;
+        const all = Object.values(d.items);
+        items = all.length;
+        tasks = all.filter((x) => x.type === "task").length;
+      } catch {
+        // Unreadable backup: still listed.
+      }
+      return { ref: i + 1, id: b.id, time: new Date(b.time).toISOString(), size: b.size, items, tasks };
+    }),
+  };
+}
+
+/**
+ * Replace a document with one of its backups (`ref` = 1 for the newest, or a
+ * backup id). The current content is backed up first, so this is reversible.
+ */
+export function restoreDocBackup(file: string, ref: string | number): { path: string; restored: string; restoredTime: string; previousBackup: string } {
+  const path = resolve(file);
+  if (!existsSync(path)) throw new CascadeError(`No such document: ${path}`);
+  const list = backups.listBackups(path);
+  const n = typeof ref === "number" ? ref : /^\d{1,4}$/.test(ref) ? Number(ref) : NaN;
+  const entry = Number.isFinite(n) ? list[n - 1] : list.find((b) => b.id === ref || b.id.startsWith(`${ref}.`));
+  if (!entry) throw new CascadeError(list.length ? `No backup "${ref}" (use 1–${list.length} or an id from list_backups)` : "This document has no backups yet");
+  const text = backups.readBackup(path, entry.id);
+  parseDocument(text); // refuse to restore something unreadable
+  const previousBackup = backups.writeBackup(path, readFileSync(path, "utf8"));
+  writeAtomic(path, text);
+  return { path, restored: entry.id, restoredTime: new Date(entry.time).toISOString(), previousBackup };
+}
+
+export function exportIcs(file: string, out?: string): { path: string; events: number } {
+  const path = resolve(file);
+  if (!existsSync(path)) throw new CascadeError(`No such document: ${path}`);
+  const { doc } = parseDocument(readFileSync(path, "utf8"));
+  const target = resolve(out ?? icsPathFor(path));
+  writeAtomic(target, buildIcs(doc, { name: pathBasename(path).replace(/\.col$/i, "") }));
+  return { path: target, events: exportableItems(doc).length };
+}

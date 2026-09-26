@@ -16,8 +16,20 @@ no cloud, no telemetry, and makes no network requests of its own.
 
 - **Columns view** — Miller-column navigation of nested folders, per-column progress rings,
   keyboard- and mouse-driven, smooth horizontal scrolling.
-- **Calendar view** — per-day columns, an optional month day picker, drag items between
-  days, split view with the columns (`Tab` / `Shift+Tab`).
+- **Calendar view** — per-day columns, drag items between days, split view with the
+  columns (`Tab` / `Shift+Tab`). Click the month name for a day picker (pin it to keep it
+  open as a column); hold a dragged item over the month name and it springs open, so any
+  day is a drop target.
+- **Folder dates** — date a folder and its unfinished tasks and sub-folders get the same
+  date, shown indented under it on that day. Move the folder and they move with it; give
+  one item its own date and it keeps it. New items in a dated folder take its date. Hold
+  `Alt` when you drop to date only the folder. A folder row shows the span of dates inside
+  it ("Today – Fri").
+- **Type a date** — end an item with `@tomorrow`, `@fri`, `@dec 5`, `@+3d` or
+  `@2026-10-01` to schedule it (`@none` removes the date).
+- **Roll over** — "N overdue → Today" in the calendar bar and a "→ Today" button on past
+  days move unfinished work forward (finished tasks stay where they were); optionally
+  automatic on open and at midnight.
 - **Six item types** — task, text note, heading, separator, folder, and template.
 - **Type to structure** — `# ` makes a heading, `---` a separator, `::` opens an inline
   command menu (all three triggers are configurable).
@@ -37,8 +49,11 @@ no cloud, no telemetry, and makes no network requests of its own.
 - **Printing** — system print, or task tickets on thermal/receipt printers: raw ESC/POS or
   StarPRNT over CUPS, image tickets via `lp`, Bluetooth LE printers, and MQTT print servers.
 - **Undo everything** — every gesture is one undo step (`Ctrl+Z` / `Ctrl+Y`).
-- **Safe files** — atomic saves, automatic local backups (10 per document, kept 5 days),
-  lenient loading that repairs damaged files instead of refusing them.
+- **Safe files** — atomic saves, automatic local backups (10 per document, kept 5 days)
+  with **Restore from Backup…** (preview what changed, restore as one undoable step, or
+  open a backup as a copy), lenient loading that repairs damaged files instead of refusing them.
+- **Calendar export** — dated tasks and folders as an `.ics` file, once or kept next to the
+  document and refreshed on every save, so calendar apps can subscribe to it.
 - **Scriptable CLI** — open files, print, and prepare calendar days from scripts or cron,
   with JSON results and meaningful exit codes.
 
@@ -169,9 +184,23 @@ cascade-cli add "Book flights" --parent "Home/Trip" --date tomorrow --tag travel
 cascade-cli finish "Book flights"
 cascade-cli move "Pack bags" --to "Home/Trip" --first
 cascade-cli search invoice --tag waiting --json
-cascade-cli agenda                               # today's items plus overdue tasks
+cascade-cli agenda                               # the next 7 days, plus overdue work
+cascade-cli agenda --from +1 --days 5 --json     # (dates: YYYY-MM-DD, today, tomorrow, +N)
+cascade-cli agenda --date tomorrow               # a single day
+cascade-cli overdue                              # unfinished work scheduled before today
+cascade-cli roll-over                            # move it all onto today
 cascade-cli delete "Old idea"                    # to Trash (again: permanently)
+cascade-cli backups                              # automatic backups, newest first
+cascade-cli restore 1                            # back to the newest backup
+cascade-cli export-ics --out ~/life.ics          # dated items as an iCalendar file
 ```
+
+Before it edits a document, `cascade-cli` (and the MCP server) saves a backup in the same
+folder the app uses — at most one every 2 minutes, so a burst of agent edits leaves one copy
+of the state before it. Undo an unwanted change with `cascade-cli restore 1` or, in the app,
+**Restore from Backup…** (command palette or ≡ menu). `restore` itself backs up the current
+content first, so it can be reversed too. If a `<document>.ics` file exists next to the
+document (the app's *Keep an .ics calendar copy* setting), every edit refreshes it.
 
 Items can be referred to by id, by exact text, or by path (`"Home/Work/Launch"`); an
 ambiguous name is an error that lists the matching ids. Every command accepts `--json`.
@@ -180,10 +209,12 @@ Exit codes: `0` ok, `1` error, `2` bad usage. Run `cascade-cli --help` for every
 ### MCP server
 
 `cascade-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on
-stdio, giving agents typed tools: `list_items`, `get_item`, `search_items`, `get_agenda`,
+stdio, giving agents typed tools: `list_items`, `get_item`, `search_items`,
+`get_agenda` (a date range, default the next 7 days), `get_overdue`, `roll_over`,
 `list_spaces_and_tags`, `add_item`, `add_items`, `update_item`, `set_finished`,
 `move_items`, `schedule_items`, `delete_items`, `add_space`, `prepare_day`,
-`create_document`. With `--file`, tools default to that document.
+`list_backups`, `restore_backup`, `export_ics`, `create_document`. With `--file`, tools
+default to that document.
 
 Claude Code:
 

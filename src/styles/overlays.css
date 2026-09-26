@@ -687,3 +687,147 @@ input[type="range"] {
 .link-btn:hover {
   text-decoration: underline;
 }
+
+/* Drag-reorderable settings lists (spaces, tags) */
+.reorder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.reorder-row {
+  position: relative;
+  cursor: default;
+  outline: none;
+  user-select: none;
+}
+.reorder-row:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.reorder-grip {
+  display: inline-flex;
+  color: var(--text-faint, var(--muted));
+  opacity: 0;
+  cursor: grab;
+  margin-left: -4px;
+}
+.reorder-row:hover .reorder-grip,
+.reorder-row.is-active .reorder-grip {
+  opacity: 0.7;
+}
+.reorder-grip.is-hidden {
+  visibility: hidden;
+}
+.reorder-list.is-dragging .reorder-row {
+  cursor: grabbing;
+}
+.reorder-row.is-drag-source {
+  opacity: 0.45;
+}
+.reorder-row.drop-before::before,
+.reorder-row.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+.reorder-row.drop-before::before {
+  top: -2px;
+}
+.reorder-row.drop-after::after {
+  bottom: -2px;
+}
+.space-dot {
+  display: inline-flex;
+  color: var(--c, var(--text-muted, inherit));
+}
+.row.wrap {
+  flex-wrap: wrap;
+}
+.input.input-sm {
+  height: 28px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+/* Documents dialog (welcome screen) */
+.documents-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+.documents-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.documents-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.documents-row.is-active {
+  background: var(--accent-soft);
+}
+.documents-row.is-missing {
+  cursor: default;
+  color: var(--text-faint);
+}
+.documents-row.is-missing .recent-name {
+  text-decoration: line-through;
+}
+.documents-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.documents-note {
+  font-size: 11px;
+  color: var(--danger, #c0392b);
+}
+.documents-time {
+  white-space: nowrap;
+}
+.documents-empty {
+  padding: 16px 8px;
+}
+
+/* Restore from backup */
+.backups-pane {
+  grid-template-columns: 270px 1fr;
+  height: 100%;
+}
+.backups-pane .split-list {
+  overflow-y: auto;
+}
+.backups-pane .split-detail {
+  overflow-y: auto;
+  gap: 12px;
+}
+.backup-outline {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.backup-outline-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.backup-outline-row.is-finished span:first-of-type {
+  text-decoration: line-through;
+}

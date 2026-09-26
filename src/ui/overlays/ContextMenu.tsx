@@ -34,10 +34,12 @@ import {
   BookmarkCheck,
   ListX,
   Settings2,
+  History,
+  CalendarArrowDown,
 } from "lucide-react";
 import { COLORS, ITEM_TYPES, TRASH_SPACE_ID, childPolicy, isContainerType, isTaggableType, type Color, type ItemType } from "../../model/types";
-import { childrenOf, isUserSpace } from "../../model/tree";
-import { get, set, toast, updatePrefs, type ContextTarget, type PrintScopeRef } from "../../state/store";
+import { childrenOf, descendants, isUserSpace } from "../../model/tree";
+import { get, set, toast, updatePrefs, type ContextTarget, type HighlightKind, type PrintScopeRef } from "../../state/store";
 import { platform } from "../../platform";
 import { closeDocument, newDocument, openDialog } from "../../state/files";
 import { indexOf, selectionOf, today } from "../../state/derived";
@@ -60,8 +62,9 @@ import {
 } from "../../state/items";
 import { copyWithToast, cutSelection, paste } from "../../state/clipboard";
 import { closeOverlay, confirmAction, openCommand, openOverlay, promptText } from "../../state/overlays";
-import { openPrint } from "../../state/printing";
-import { openStack } from "../../state/stack";
+import { openPrint, ticketsFor } from "../../state/printing";
+import { exportCalendar } from "../../state/exports";
+import { openStack, stackItems } from "../../state/stack";
 import {
   deleteSpace,
   duplicateSpace,
@@ -102,7 +105,36 @@ function colorEntries(apply: (c: Color) => void, current?: Color): MenuEntry[] {
   return COLORS.map((c) => ({ label: c === "default" ? "Default" : c[0].toUpperCase() + c.slice(1), icon: swatch(c), checked: c === current, run: () => apply(c) }));
 }
 
-const clearPreviews = () => set({ createPreview: null, deletePreview: null });
+const clearPreviews = () => set({ createPreview: null, deletePreview: null, highlightPreview: null });
+
+// Hover previews: highlight what a command would act on.
+const highlight = (kind: HighlightKind, ids: string[]) => () => set({ highlightPreview: ids.length ? { kind, ids } : null });
+
+/** The items plus everything inside them (what copy, cut and duplicate carry). */
+function withSubtrees(ids: string[]): string[] {
+  const ix = indexOf(get().doc);
+  const out = new Set<string>();
+  for (const id of ids) {
+    out.add(id);
+    for (const d of descendants(ix, id)) out.add(d.id);
+  }
+  return [...out];
+}
+
+/** The tasks that printing this scope would put on tickets. */
+function printedIds(scope: PrintScopeRef): string[] {
+  try {
+    return [...new Set(ticketsFor(scope).flatMap((t) => t.taskIds))];
+  } catch {
+    return [];
+  }
+}
+
+/** The tasks a Stack over this scope would run through, honouring the Stack settings. */
+function stackedIds(scope: PrintScopeRef): string[] {
+  const s = get();
+  return stackItems(indexOf(s.doc), scope, { recursive: s.prefs.stack.recursive, includeFinished: s.prefs.stack.includeFinished }).map((x) => x.id);
+}
 
 function childPreview(itemId: string) {
   const kids = childrenOf(indexOf(get().doc), itemId);
@@ -150,15 +182,15 @@ function itemEntries(itemId: string, view: "columns" | "calendar"): MenuEntry[] 
     return [
       colorsEntry,
       { separator: true },
-      { label: "Copy", icon: <Copy size={14} />, hint: keyLabel("copy"), run: () => void copyWithToast() },
-      { label: "Cut", icon: <Scissors size={14} />, hint: keyLabel("cut"), run: () => void cutSelection() },
-      { label: "Duplicate", icon: <CopyPlus size={14} />, hint: keyLabel("duplicate"), run: duplicateSelection },
-      { label: "Move", icon: <FolderInput size={14} />, submenu: moveEntries() },
+      { label: "Copy", icon: <Copy size={14} />, hint: keyLabel("copy"), onHover: highlight("copy", withSubtrees(ids)), run: () => void copyWithToast() },
+      { label: "Cut", icon: <Scissors size={14} />, hint: keyLabel("cut"), onHover: highlight("cut", withSubtrees(ids)), run: () => void cutSelection() },
+      { label: "Duplicate", icon: <CopyPlus size={14} />, hint: keyLabel("duplicate"), onHover: highlight("duplicate", withSubtrees(ids)), run: duplicateSelection },
+      { label: "Move", icon: <FolderInput size={14} />, onHover: highlight("move", ids), submenu: moveEntries() },
       { separator: true },
       { label: "Schedule…", icon: <CalendarPlus size={14} />, hint: keyLabel("schedule"), run: () => openCommand("schedule") },
-      { label: "Move to…", icon: <FolderInput size={14} />, hint: keyLabel("move-to"), run: () => openCommand("move") },
-      { label: "Print", icon: <Printer size={14} />, hint: keyLabel("print"), run: () => openPrint({ kind: "selection", ids }) },
-      { label: "Launch Stack", icon: <Layers size={14} />, hint: keyLabel("stack"), run: () => openStack({ kind: "selection", ids }) },
+      { label: "Move to…", icon: <FolderInput size={14} />, hint: keyLabel("move-to"), onHover: highlight("move", ids), run: () => openCommand("move") },
+      { label: "Print", icon: <Printer size={14} />, hint: keyLabel("print"), onHover: () => highlight("print", printedIds({ kind: "selection", ids }))(), run: () => openPrint({ kind: "selection", ids }) },
+      { label: "Launch Stack", icon: <Layers size={14} />, hint: keyLabel("stack"), onHover: () => highlight("stack", stackedIds({ kind: "selection", ids }))(), run: () => openStack({ kind: "selection", ids }) },
       { separator: true },
       deleteEntry,
     ];
@@ -215,23 +247,23 @@ function itemEntries(itemId: string, view: "columns" | "calendar"): MenuEntry[] 
         ]
       : []),
     { separator: true },
-    { label: "Copy", icon: <Copy size={14} />, hint: keyLabel("copy"), run: () => void copyWithToast() },
+    { label: "Copy", icon: <Copy size={14} />, hint: keyLabel("copy"), onHover: highlight("copy", withSubtrees(ids)), run: () => void copyWithToast() },
     {
       label: "Copy ID",
       icon: <Hash size={14} />,
       run: () => void platform().writeClipboard(itemId).then(() => toast("Item ID copied")),
     },
-    { label: "Cut", icon: <Scissors size={14} />, hint: keyLabel("cut"), run: () => void cutSelection() },
+    { label: "Cut", icon: <Scissors size={14} />, hint: keyLabel("cut"), onHover: highlight("cut", withSubtrees(ids)), run: () => void cutSelection() },
     { label: "Paste", icon: <ClipboardPaste size={14} />, hint: keyLabel("paste"), onHover: () => set({ createPreview: { afterId: itemId } }), run: () => void paste() },
-    { label: "Duplicate", icon: <CopyPlus size={14} />, hint: keyLabel("duplicate"), run: duplicateSelection },
-    { label: "Move", icon: <FolderInput size={14} />, submenu: moveEntries() },
+    { label: "Duplicate", icon: <CopyPlus size={14} />, hint: keyLabel("duplicate"), onHover: highlight("duplicate", withSubtrees(ids)), run: duplicateSelection },
+    { label: "Move", icon: <FolderInput size={14} />, onHover: highlight("move", ids), submenu: moveEntries() },
     { separator: true },
     { label: "Toggle Finished", icon: <CheckSquare size={14} />, hint: keyLabel("toggle-finished"), disabled: it.type !== "task", run: () => toggleFinished(ids) },
     { label: "Schedule…", icon: <CalendarPlus size={14} />, hint: keyLabel("schedule"), run: () => openCommand("schedule") },
-    { label: "Move to…", icon: <FolderInput size={14} />, hint: keyLabel("move-to"), run: () => openCommand("move") },
+    { label: "Move to…", icon: <FolderInput size={14} />, hint: keyLabel("move-to"), onHover: highlight("move", ids), run: () => openCommand("move") },
     ...(anyContainer ? [{ label: "Insert Template…", icon: <BookmarkCheck size={14} />, run: () => openOverlay({ kind: "template", target: { parentId: itemId } }) }] : []),
-    { label: "Print", icon: <Printer size={14} />, hint: keyLabel("print"), run: () => openPrint({ kind: "selection", ids }) },
-    { label: "Launch Stack", icon: <Layers size={14} />, hint: keyLabel("stack"), run: () => openStack({ kind: "selection", ids }) },
+    { label: "Print", icon: <Printer size={14} />, hint: keyLabel("print"), onHover: () => highlight("print", printedIds({ kind: "selection", ids }))(), run: () => openPrint({ kind: "selection", ids }) },
+    { label: "Launch Stack", icon: <Layers size={14} />, hint: keyLabel("stack"), onHover: () => highlight("stack", stackedIds({ kind: "selection", ids }))(), run: () => openStack({ kind: "selection", ids }) },
     { separator: true },
     deleteEntry,
   ];
@@ -294,8 +326,8 @@ function surfaceEntries(t: Extract<ContextTarget, { type: "surface" }>): MenuEnt
     { label: "Paste", icon: <ClipboardPaste size={14} />, run: () => void paste() },
     { label: "Insert template…", icon: <BookmarkCheck size={14} />, disabled: isTrash, run: () => openOverlay({ kind: "template", target: templateTarget }) },
     { separator: true },
-    { label: isDay ? "Print day" : "Print column", icon: <Printer size={14} />, run: () => openPrint(printScope) },
-    { label: "Launch stack", icon: <Layers size={14} />, run: () => openStack(printScope) },
+    { label: isDay ? "Print day" : "Print column", icon: <Printer size={14} />, onHover: () => highlight("print", printedIds(printScope))(), run: () => openPrint(printScope) },
+    { label: "Launch stack", icon: <Layers size={14} />, onHover: () => highlight("stack", stackedIds(printScope))(), run: () => openStack(printScope) },
     ...(isDay
       ? [
           { separator: true },
@@ -386,6 +418,9 @@ function appEntries(): MenuEntry[] {
     { label: "Application Settings", icon: <Settings size={14} />, hint: keyLabel("settings"), run: () => openOverlay({ kind: "appSettings", tab: "general" }) },
     { label: "Print Settings", icon: <Printer size={14} />, run: () => openOverlay({ kind: "printSettings" }) },
     { label: "Document Settings", icon: <Settings2 size={14} />, hint: keyLabel("doc-settings"), disabled: !hasDoc, run: () => openOverlay({ kind: "docSettings", tab: "general" }) },
+    { separator: true },
+    { label: "Restore from Backup…", icon: <History size={14} />, disabled: !hasDoc, run: () => openOverlay({ kind: "backups" }) },
+    { label: "Export Calendar (.ics)…", icon: <CalendarArrowDown size={14} />, disabled: !hasDoc, run: () => void exportCalendar() },
     { separator: true },
     { label: "Keyboard Shortcuts", icon: <Keyboard size={14} />, hint: "F1", run: () => updatePrefs({ showHelp: true }) },
     { label: "About Cascade", icon: <Info size={14} />, run: () => openOverlay({ kind: "about" }) },

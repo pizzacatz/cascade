@@ -10,6 +10,7 @@ import { get, set, toast, updatePrefs, useApp } from "./store";
 import { normalizePreferences } from "./prefs";
 import { normalizePrintSettings } from "../print/settings";
 import { DOC_TEMPLATES, type DocTemplate } from "./templates";
+import { writeIcsSidecar } from "./exports";
 
 const PREFS_STORE = "preferences.json";
 const PRINT_STORE = "printing.json";
@@ -66,7 +67,11 @@ function addRecent(path: string) {
   const prefs = get().prefs;
   const stored = toStoredPath(path);
   const recentFiles = [stored, ...prefs.recentFiles.filter((p) => p !== stored && fromStoredPath(p) !== path)].slice(0, RECENT_LIMIT);
-  updatePrefs({ recentFiles, lastOpenedDocumentPath: stored });
+  // Timestamps only for documents still listed.
+  const recentOpenedAt = Object.fromEntries(
+    Object.entries({ ...prefs.recentOpenedAt, [stored]: Date.now() }).filter(([p]) => recentFiles.includes(p)),
+  );
+  updatePrefs({ recentFiles, recentOpenedAt, lastOpenedDocumentPath: stored });
 }
 
 export function clearRecentFiles() {
@@ -231,6 +236,7 @@ async function saveUnlocked(): Promise<boolean> {
         .writeBackup(s.filePath, text)
         .catch((e) => console.warn("Backup failed", e));
     }
+    writeIcsSidecar(s.filePath, s.doc).catch((e) => console.warn("Calendar copy failed", e));
     return true;
   } catch (e) {
     const msg = `Could not save ${basename(s.filePath)}: ${String(e)}`;

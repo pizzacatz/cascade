@@ -6,7 +6,9 @@
 import { create } from "zustand";
 import { applyPatches, enablePatches, produceWithPatches, type Patch } from "immer";
 import type { Doc, ViewName, ViewState } from "../model/types";
-import { defaultViewState } from "../model/defaults";
+import { defaultViewState, nowIso } from "../model/defaults";
+import { buildIndex } from "../model/tree";
+import { dateRuleChanges } from "../model/schedule";
 import { defaultPreferences, type Preferences } from "./prefs";
 import { defaultPrintSettings, type PrintSettings } from "../print/settings";
 
@@ -62,7 +64,8 @@ export type Overlay =
   | { kind: "template"; target: { parentId: string } | { date: string } }
   | { kind: "debug"; tab: "speed" | "drag" | "state" }
   | { kind: "about" }
-  | { kind: "prepare"; date?: string };
+  | { kind: "prepare"; date?: string }
+  | { kind: "backups" };
 
 export type CreateTarget = { view: "columns"; parentId: string } | { view: "calendar"; date: string };
 
@@ -99,6 +102,8 @@ export interface DragState {
   sourceView: ViewName;
   palette: PaletteDrag | null;
   copy: boolean;
+  /** Alt held: date only the dragged folder, not its child items. */
+  alt?: boolean;
   target: DropTarget | null;
 }
 
@@ -159,6 +164,8 @@ export interface AppState {
   createPreview: { afterId?: string; columnStart?: string } | null;
   /** Items that a hovered Delete button/menu entry would remove. */
   deletePreview: string[] | null;
+  /** Items a hovered menu command (copy, cut, duplicate, move, print, stack) would act on. */
+  highlightPreview: { kind: HighlightKind; ids: string[] } | null;
   /** Patches applied since the last successful save (re-applied if the file changes on disk). */
   unsavedPatches: Patch[];
 }
@@ -191,7 +198,10 @@ export const useApp = create<AppState>(() => ({
   unsavedPatches: [],
   createPreview: null,
   deletePreview: null,
+  highlightPreview: null,
 }));
+
+export type HighlightKind = "copy" | "cut" | "duplicate" | "move" | "print" | "stack";
 
 export const get = () => useApp.getState();
 export const set = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) =>
@@ -210,10 +220,50 @@ export interface TransactOptions {
  * Apply a document mutation as one undoable step. Returns false when there is
  * no document or the recipe changed nothing.
  */
+let dateCascade = true;
+
+/** Run `fn` with folder date cascading off (e.g. an Alt-drop that dates only the folder). */
+export function withoutDateCascade<T>(fn: () => T): T {
+  const was = dateCascade;
+  dateCascade = false;
+  try {
+    return fn();
+  } finally {
+    dateCascade = was;
+  }
+}
+
+/**
+ * Apply the recipe, then the folder date rules (model/schedule.ts) as part of
+ * the same change, so cascaded dates undo together with their cause.
+ */
+function produceWithDateRules(doc: Doc, recipe: (draft: Doc) => void): [Doc, Patch[], Patch[]] {
+  const [mid, patches, inverse] = produceWithPatches(doc, recipe);
+  if (!patches.length) return [mid, patches, inverse];
+  const changed = new Set<string>();
+  for (const p of patches) {
+    if (p.path[0] === "items" && p.path.length >= 2) changed.add(String(p.path[1]));
+  }
+  if (!changed.size) return [mid, patches, inverse];
+  const changes = dateRuleChanges(doc, mid, changed, buildIndex(mid), { cascade: dateCascade });
+  if (!changes.size) return [mid, patches, inverse];
+  const now = nowIso();
+  const [next, p2, inv2] = produceWithPatches(mid, (d) => {
+    for (const [id, c] of changes) {
+      const x = d.items[id];
+      if (!x) continue;
+      x.scheduleDate = c.scheduleDate;
+      x.schedulePosition = c.schedulePosition;
+      if (c.dateChanged) x.updatedAt = now;
+    }
+  });
+  return [next, [...patches, ...p2], [...inv2, ...inverse]];
+}
+
 export function transact(label: string, recipe: (draft: Doc) => void, opts: TransactOptions = {}): boolean {
   const s = get();
   if (!s.doc) return false;
-  const [next, patches, inverse] = produceWithPatches(s.doc, recipe);
+  const [next, patches, inverse] = produceWithDateRules(s.doc, recipe);
   const viewBefore = s.view;
   const viewAfter = opts.view ? opts.view(s.view) : s.view;
   if (patches.length === 0) {

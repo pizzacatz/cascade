@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, MoreHorizontal, CalendarCheck, CalendarDays, AlertTriangle, Repeat } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, ChevronDown, MoreHorizontal, CalendarCheck, AlertTriangle, Repeat, Pin, PinOff, ArrowRightToLine } from "lucide-react";
 import type { Item } from "../model/types";
 import { childrenOf, itemsOnDay } from "../model/tree";
 import {
@@ -16,6 +16,7 @@ import { indexOf, today } from "../state/derived";
 import { calendarDays, setCalendarAnchor, setVisibleDayCount, shiftCalendar, toggleDayPicker } from "../state/nav";
 import { exitEdit } from "../state/items";
 import { prepareDayWithToast } from "../state/config";
+import { overdueItems, rollOverDay, rollOverOverdue, unfinishedOnDay } from "../state/schedule";
 import { ProgressRing } from "./ProgressRing";
 import { MonthGrid, dayStatus } from "./MonthGrid";
 import { CreateRow, EditFooter } from "./CreateRow";
@@ -56,15 +57,9 @@ export function CalendarView() {
         <button className="btn btn-ghost btn-sm btn-icon" aria-label="Next day" onClick={() => shiftCalendar(1)}>
           <ChevronRight size={15} />
         </button>
-        <span className="calendar-month">{formatMonth(anchor)}</span>
+        <MonthButton anchor={anchor} dayCount={dayCount} pinned={showPicker} />
         <span className="grow" />
-        <button
-          className={`btn btn-ghost btn-sm ${showPicker ? "is-active" : ""}`}
-          aria-pressed={showPicker}
-          onClick={toggleDayPicker}
-        >
-          <CalendarDays size={14} /> Day picker
-        </button>
+        <OverdueButton />
       </div>
       <div className="calendar-strip" ref={ref}>
         {showPicker && <DayPicker width={colWidth} anchor={anchor} dayCount={dayCount} />}
@@ -108,6 +103,7 @@ function DayColumn({ date, width }: { date: string; width: number }) {
       : [];
   const tasks = items.filter((i) => i.type === "task");
   const progress = tasks.length ? tasks.filter((i) => i.finished).length / tasks.length : -1;
+  const pending = past && doc ? unfinishedOnDay(date) : 0;
 
   const openMenu = (x: number, y: number) =>
     openOverlay({ kind: "context", x, y, target: { type: "surface", view: "calendar", date } });
@@ -132,6 +128,15 @@ function DayColumn({ date, width }: { date: string; width: number }) {
             onClick={() => openOverlay({ kind: "docSettings", tab: "recurrence" })}
           >
             <AlertTriangle size={14} />
+          </button>
+        )}
+        {past && pending > 0 && (
+          <button
+            className="btn btn-ghost btn-sm day-rollover"
+            title={`Move ${pending} unfinished item${pending === 1 ? "" : "s"} to today`}
+            onClick={() => rollOverDay(date)}
+          >
+            <ArrowRightToLine size={13} /> Today
           </button>
         )}
         {progress >= 0 && (
@@ -200,7 +205,7 @@ function DayColumn({ date, width }: { date: string; width: number }) {
   );
 }
 
-function DayPicker({ width, anchor, dayCount }: { width: number; anchor: string; dayCount: number }) {
+function DayPickerGrid({ anchor, dayCount, onPicked, extraFooter }: { anchor: string; dayCount: number; onPicked?: () => void; extraFooter?: React.ReactNode }) {
   const weekStartsOn = useApp((s) => s.prefs.weekStartsOn);
   const showWeek = useApp((s) => s.prefs.showWeekNumber);
   const doc = useApp((s) => s.doc);
@@ -210,28 +215,162 @@ function DayPicker({ width, anchor, dayCount }: { width: number; anchor: string;
   const visibleEnd = addDays(anchor, dayCount - 1);
   const away = t < anchor || t > visibleEnd;
   return (
+    <MonthGrid
+      month={anchor}
+      today={t}
+      weekStartsOn={weekStartsOn}
+      showWeekNumbers={showWeek}
+      inRange={(d) => d >= anchor && d <= visibleEnd}
+      status={(d) => dayStatus(ix, d)}
+      onSelect={(d) => {
+        setCalendarAnchor(d);
+        onPicked?.();
+      }}
+      // The picker follows the strip: changing month moves the whole calendar.
+      onMonthChange={(m) => setCalendarAnchor(m < startOfMonth(anchor) ? addMonths(anchor, -1) : addMonths(anchor, 1))}
+      dayProps={(d) => ({ "data-day-picker": d, ...(d === dropDate ? { "data-drop": "1" } : {}) })}
+      footer={
+        <div className="picker-foot">
+          {away && (
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                setCalendarAnchor(t);
+                onPicked?.();
+              }}
+            >
+              Today
+            </button>
+          )}
+          <span className="grow" />
+          {extraFooter}
+        </div>
+      }
+    />
+  );
+}
+
+/** The docked picker: a column at the left of the day strip. */
+function DayPicker({ width, anchor, dayCount }: { width: number; anchor: string; dayCount: number }) {
+  return (
     <div className="column day-picker" style={{ width }}>
-      <MonthGrid
-        month={anchor}
-        today={t}
-        weekStartsOn={weekStartsOn}
-        showWeekNumbers={showWeek}
-        inRange={(d) => d >= anchor && d <= visibleEnd}
-        status={(d) => dayStatus(ix, d)}
-        onSelect={(d) => setCalendarAnchor(d)}
-        // The picker follows the strip: changing month moves the whole calendar.
-        onMonthChange={(m) => setCalendarAnchor(m < startOfMonth(anchor) ? addMonths(anchor, -1) : addMonths(anchor, 1))}
-        dayProps={(d) => ({ "data-day-picker": d, ...(d === dropDate ? { "data-drop": "1" } : {}) })}
-        footer={
-          away ? (
-            <div className="picker-foot">
-              <button className="btn btn-sm" onClick={() => setCalendarAnchor(t)}>
-                Today
-              </button>
-            </div>
-          ) : null
+      <DayPickerGrid
+        anchor={anchor}
+        dayCount={dayCount}
+        extraFooter={
+          <button className="btn btn-ghost btn-sm" title="Close the docked day picker (the month name opens it again)" onClick={toggleDayPicker}>
+            <PinOff size={13} /> Unpin
+          </button>
         }
       />
     </div>
   );
+}
+
+/**
+ * The month name. Clicking it drops the day picker down under it; holding a
+ * dragged item over it springs the picker open so any day can be a drop target.
+ */
+function MonthButton({ anchor, dayCount, pinned }: { anchor: string; dayCount: number; pinned: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [byDrag, setByDrag] = useState(false);
+  const dragging = useApp((s) => s.drag?.status === "active");
+  const wrap = useRef<HTMLDivElement>(null);
+  const hover = useRef<number | undefined>(undefined);
+
+  // A picker opened by a drag closes when the drag ends.
+  useEffect(() => {
+    if (byDrag && !dragging) {
+      setOpen(false);
+      setByDrag(false);
+    }
+  }, [dragging, byDrag]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
+    };
+    window.addEventListener("mousedown", onDown, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("mousedown", onDown, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [open]);
+
+  useEffect(() => () => window.clearTimeout(hover.current), []);
+
+  return (
+    <div className="month-button-wrap" ref={wrap}>
+      <button
+        className={`btn btn-ghost btn-sm calendar-month ${open || pinned ? "is-active" : ""}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={pinned ? "Hide the day picker" : "Pick a day"}
+        onClick={() => {
+          if (pinned) toggleDayPicker();
+          else setOpen((o) => !o);
+        }}
+        onMouseEnter={() => {
+          if (!get().drag || get().drag?.status !== "active" || open || pinned) return;
+          hover.current = window.setTimeout(() => {
+            setOpen(true);
+            setByDrag(true);
+          }, 350);
+        }}
+        onMouseLeave={() => window.clearTimeout(hover.current)}
+      >
+        {formatMonth(anchor)}
+        <ChevronDown size={13} />
+      </button>
+      {open && (
+        <div className="popover day-picker-popover" role="dialog" aria-label="Day picker">
+          <DayPickerGrid
+            anchor={anchor}
+            dayCount={dayCount}
+            onPicked={() => !byDrag && setOpen(false)}
+            extraFooter={
+              <button
+                className="btn btn-ghost btn-sm"
+                title="Keep the day picker open as a column"
+                onClick={() => {
+                  setOpen(false);
+                  toggleDayPicker();
+                }}
+              >
+                <Pin size={13} /> Pin
+              </button>
+            }
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "N overdue → Today" when unfinished work sits on past days. */
+function OverdueButton() {
+  const count = useApp((s) => (s.doc ? overdueCount(s.doc.items, today()) : 0));
+  if (!count) return null;
+  return (
+    <button className="btn btn-ghost btn-sm overdue-btn" title="Move unfinished tasks from past days to today" onClick={() => rollOverOverdue()}>
+      <ArrowRightToLine size={13} /> {count} overdue → Today
+    </button>
+  );
+}
+
+const overdueCache = new WeakMap<object, { day: string; n: number }>();
+function overdueCount(items: object, day: string): number {
+  const c = overdueCache.get(items);
+  if (c && c.day === day) return c.n;
+  const n = overdueItems(day).length;
+  overdueCache.set(items, { day, n });
+  return n;
 }

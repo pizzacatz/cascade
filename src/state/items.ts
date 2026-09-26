@@ -23,7 +23,8 @@ import {
 import type { OutlineNode } from "../model/outline";
 import { get, set, transact, setView, toast, type CreateTarget } from "./store";
 import { indexOf, selectionOf } from "./derived";
-import { addDays } from "../model/dates";
+import { addDays, formatShortDay, relativeDayLabel, todayKey } from "../model/dates";
+import { splitTypedDate } from "./schedule";
 import {
   enterEdit,
   selectCalendarItem,
@@ -254,6 +255,7 @@ export function createFromEdit(kind: "sibling" | "child"): void {
   const s = get();
   if (!s.edit) return;
   const id = s.edit.itemId;
+  takeTypedDate();
   flushEdit();
   set({ edit: null });
   const view = focused();
@@ -294,8 +296,32 @@ export function flushEdit(): void {
   });
 }
 
+/**
+ * "Call dentist @fri": when an edit is committed, a trailing @date schedules
+ * the item and is removed from its text (see splitTypedDate).
+ */
+function takeTypedDate(): void {
+  const s = get();
+  if (!s.edit || !s.doc) return;
+  const found = splitTypedDate(s.edit.draft, todayKey(), s.prefs.weekStartsOn);
+  const it = s.doc.items[s.edit.itemId];
+  if (!found || !it || it.type === "separator") return;
+  const id = it.id;
+  set({ edit: { ...s.edit, draft: found.text } });
+  flushEdit();
+  if (found.date) {
+    if (it.scheduleDate !== found.date) {
+      scheduleItems([id], found.date, "Schedule");
+      toast(`Scheduled on ${relativeDayLabel(found.date) ?? formatShortDay(found.date)}`, "success");
+    }
+  } else if (it.scheduleDate && it.parentId) {
+    descheduleItems([id]);
+  }
+}
+
 /** Leave edit mode. Empty, childless items are removed rather than kept. */
 export function exitEdit(): void {
+  takeTypedDate();
   const s = get();
   if (!s.edit || !s.doc) return;
   const { itemId, draft } = s.edit;

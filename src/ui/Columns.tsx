@@ -101,6 +101,9 @@ function ColumnOrConvert(props: { columnId: string; openChildId?: string; width:
   return leaf ? <ConvertColumn itemId={props.columnId} width={props.width} /> : <Column {...props} />;
 }
 
+/** From this many items a column lets the browser skip rendering off-screen rows. */
+const LONG_COLUMN = 100;
+
 function Column({ columnId, openChildId, width }: { columnId: string; openChildId?: string; width: number }) {
   const doc = useApp((s) => s.doc);
   const hideHeader = useApp((s) => s.prefs.hideColumnHeaders);
@@ -148,6 +151,18 @@ function Column({ columnId, openChildId, width }: { columnId: string; openChildI
   const progress = showProgress && doc ? columnProgress(ix, statsOf(doc), columnId, doc.config.progressionMode) : -1;
   const isTrash = columnId === TRASH_SPACE_ID;
   useLayoutEffect(measureConnector, [measureConnector, openChildId, kids.length, width, doc]);
+  // Keep a newly selected item of this column in view (keyboard navigation,
+  // "Open in columns", search results…).
+  const selKey = useApp((s) => (s.view.focusedView === "columns" ? s.view.columnsSelection.join("|") : ""));
+  const prevSel = useRef<string[]>([]);
+  useLayoutEffect(() => {
+    const cur = selKey ? selKey.split("|") : [];
+    const added = cur.filter((id) => !prevSel.current.includes(id));
+    prevSel.current = cur;
+    const id = added.at(-1);
+    if (!id) return;
+    colRef.current?.querySelector(`.item-row[data-item-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [selKey]);
 
   const title = folder ? folder.text || "Untitled" : space?.name ?? "";
   const icon = folder ? folder.icon : space?.icon;
@@ -212,7 +227,7 @@ function Column({ columnId, openChildId, width }: { columnId: string; openChildI
       )}
       {showProgress && progress >= 0 && hideHeader && <div className="column-bar" style={{ width: `${progress * 100}%` }} />}
       <div
-        className={`column-body ${dropEnd ? "drop-end" : ""} ${previewTop ? "preview-top" : ""}`}
+        className={`column-body ${dropEnd ? "drop-end" : ""} ${previewTop ? "preview-top" : ""} ${kids.length >= LONG_COLUMN ? "is-long" : ""}`}
         data-column-id={columnId}
         onMouseDown={onBodyMouseDown}
         onContextMenu={onBodyContext}

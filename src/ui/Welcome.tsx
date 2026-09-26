@@ -1,4 +1,5 @@
-import { FilePlus, FolderOpen, LayoutTemplate, FileText, X } from "lucide-react";
+import { useState } from "react";
+import { FilePlus, FolderOpen, LayoutTemplate, FileText, Library, X } from "lucide-react";
 import { useApp, updatePrefs } from "../state/store";
 import { newDocument, openDialog, openPath, clearRecentFiles, fromStoredPath } from "../state/files";
 import { openCommand } from "../state/overlays";
@@ -6,9 +7,13 @@ import { keyLabel } from "../state/shortcuts";
 import { basename, displayName } from "../platform";
 import { DOC_TEMPLATES } from "../state/templates";
 import { Icon } from "./icons";
+import { DocumentsDialog } from "./DocumentsDialog";
+
+const RECENT_ON_WELCOME = 5;
 
 export function Welcome() {
   const recent = useApp((s) => s.prefs.recentFiles);
+  const [showDocs, setShowDocs] = useState(false);
   return (
     <div className="welcome">
       <div className="welcome-card" onKeyDown={onWelcomeKey}>
@@ -35,6 +40,11 @@ export function Welcome() {
             <span>Open…</span>
             <span className="kbd">{keyLabel("open-file")}</span>
           </button>
+          <button className="welcome-action" onClick={() => setShowDocs(true)}>
+            <Library size={18} />
+            <span>Documents…</span>
+            <span className="faint small">{recent.length ? `${recent.length} recent` : "None yet"}</span>
+          </button>
         </div>
         <div className="welcome-templates">
           {DOC_TEMPLATES.slice(1).map((t) => (
@@ -49,12 +59,17 @@ export function Welcome() {
           <div className="welcome-recent">
             <div className="row">
               <h2 className="grow">Recent</h2>
+              {recent.length > RECENT_ON_WELCOME && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowDocs(true)}>
+                  Show all ({recent.length})
+                </button>
+              )}
               <button className="btn btn-ghost btn-sm" onClick={clearRecentFiles}>
                 Clear
               </button>
             </div>
             <ul>
-              {recent.map((p) => (
+              {recent.slice(0, RECENT_ON_WELCOME).map((p) => (
                 <li key={p}>
                   <button className="recent-item" onClick={() => void openPath(p)} title={fromStoredPath(p)}>
                     <FileText size={15} />
@@ -79,6 +94,7 @@ export function Welcome() {
         </p>
         <p className="welcome-version faint">Cascade 0.1.0</p>
       </div>
+      {showDocs && <DocumentsDialog onClose={() => setShowDocs(false)} />}
     </div>
   );
 }

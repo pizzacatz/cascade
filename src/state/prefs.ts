@@ -34,7 +34,13 @@ export interface Preferences {
   showWeekNumber: boolean;
   weekStartsOn: WeekStart;
   recentFiles: string[];
+  /** When each recent document was last opened (ms), keyed by stored path. */
+  recentOpenedAt: Record<string, number>;
   openLastDocumentOnStartup: boolean;
+  /** Move unfinished overdue work to today when a document opens and at midnight. */
+  rollOverOverdue: boolean;
+  /** Rewrite `<document>.ics` next to each document on every save. */
+  keepIcsCopy: boolean;
   lastOpenedDocumentPath: string | null;
   showHelp: boolean;
   hideColumnHeaders: boolean;
@@ -61,7 +67,10 @@ export function defaultPreferences(): Preferences {
     showWeekNumber: false,
     weekStartsOn: "monday",
     recentFiles: [],
+    recentOpenedAt: {},
     openLastDocumentOnStartup: true,
+    rollOverOverdue: false,
+    keepIcsCopy: false,
     lastOpenedDocumentPath: null,
     showHelp: false,
     hideColumnHeaders: false,
@@ -108,7 +117,13 @@ export function normalizePreferences(raw: unknown): Preferences {
     recentFiles: Array.isArray(r.recentFiles)
       ? r.recentFiles.filter((p): p is string => typeof p === "string").slice(0, 12)
       : [],
+    recentOpenedAt:
+      r.recentOpenedAt && typeof r.recentOpenedAt === "object"
+        ? Object.fromEntries(Object.entries(r.recentOpenedAt as Record<string, unknown>).filter((e): e is [string, number] => typeof e[1] === "number"))
+        : {},
     openLastDocumentOnStartup: bool(r.openLastDocumentOnStartup, d.openLastDocumentOnStartup),
+    rollOverOverdue: bool(r.rollOverOverdue, d.rollOverOverdue),
+    keepIcsCopy: bool(r.keepIcsCopy, d.keepIcsCopy),
     lastOpenedDocumentPath: typeof r.lastOpenedDocumentPath === "string" ? r.lastOpenedDocumentPath : null,
     showHelp: bool(r.showHelp, d.showHelp),
     hideColumnHeaders: bool(r.hideColumnHeaders, d.hideColumnHeaders),

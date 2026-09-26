@@ -4,13 +4,17 @@
 import type { Doc, Item, Space } from "./types";
 import { TRASH_SPACE_ID, TREE_SPACE_ID, SYSTEM_SPACE_IDS, isContainerType } from "./types";
 import { compareKeys } from "./order";
+import { groupDay } from "./schedule";
 
 export interface DocIndex {
   items: Record<string, Item>;
   spaces: Space[];
   spaceIds: Set<string>;
   children: Map<string, Item[]>;
+  /** Items per day in display order: each after its dated folder. */
   byDay: Map<string, Item[]>;
+  /** Indent level of each scheduled item within its day (0 = top level). */
+  dayDepth: Map<string, number>;
 }
 
 const byPosition = (a: Item, b: Item) =>
@@ -34,13 +38,23 @@ export function buildIndex(doc: Doc): DocIndex {
     }
   }
   for (const list of children.values()) list.sort(byPosition);
-  for (const list of byDay.values()) list.sort(bySchedule);
+  const dayDepth = new Map<string, number>();
+  const lookup = (id: string) => doc.items[id];
+  for (const [day, list] of byDay) {
+    list.sort(bySchedule);
+    if (list.length > 1) {
+      const grouped = groupDay(list, lookup);
+      byDay.set(day, grouped.map((e) => e.item));
+      for (const e of grouped) if (e.depth) dayDepth.set(e.item.id, e.depth);
+    }
+  }
   return {
     items: doc.items,
     spaces: sortSpaces(doc.config.spaces),
     spaceIds: new Set(doc.config.spaces.map((s) => s.id)),
     children,
     byDay,
+    dayDepth,
   };
 }
 

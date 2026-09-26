@@ -1,5 +1,6 @@
 import { Settings, Monitor, Sun, Moon } from "lucide-react";
-import { useApp, updatePrefs, toast } from "../../state/store";
+import { get, useApp, updatePrefs, toast } from "../../state/store";
+import { exportCalendar, writeIcsSidecar } from "../../state/exports";
 import { confirmAction, openOverlay } from "../../state/overlays";
 import { enablePortableMode, portableStatus } from "../../state/files";
 import { MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, defaultPreferences, type DebugMode } from "../../state/prefs";
@@ -154,6 +155,31 @@ export function AppSettings({ tab }: { tab: Tab }) {
               </div>
             </div>
             <Toggle label="Show ISO week numbers in the day picker" checked={p.showWeekNumber} onChange={(v) => updatePrefs({ showWeekNumber: v })} />
+            <Toggle
+              label="Move unfinished tasks to today automatically"
+              hint="When a document opens and at midnight, unfinished tasks (and folders with unfinished tasks) on past days move to today. Finished tasks stay where they were."
+              checked={p.rollOverOverdue}
+              onChange={(v) => updatePrefs({ rollOverOverdue: v })}
+            />
+            <Toggle
+              label="Keep an .ics calendar copy next to each document"
+              hint="Rewritten on every save as “<document>.ics”, so calendar apps can subscribe to the file. Dated tasks and folders become all-day events."
+              checked={p.keepIcsCopy}
+              onChange={(v) => {
+                updatePrefs({ keepIcsCopy: v });
+                const s = get();
+                if (v && s.doc && s.filePath) writeIcsSidecar(s.filePath, s.doc).catch((e) => toast(`Could not write the calendar copy: ${String(e)}`, "error", 6000));
+              }}
+            />
+            <div className="field-inline">
+              <span>
+                Export the calendar once
+                <span className="field-hint block">Save the current document’s dated items as an .ics file.</span>
+              </span>
+              <button className="btn btn-sm" onClick={() => void exportCalendar()}>
+                Export .ics…
+              </button>
+            </div>
           </>
         )}
       </div>

@@ -4,7 +4,7 @@ import type { Item, ViewName } from "../model/types";
 import { isContainerType } from "../model/types";
 import { formatShortDay, relativeDayLabel } from "../model/dates";
 import { useApp, get } from "../state/store";
-import { statsOf, styleFor, today, indexOf } from "../state/derived";
+import { folderSpan, statsOf, styleFor, today, indexOf } from "../state/derived";
 import {
   enterEdit,
   focusView,
@@ -12,6 +12,7 @@ import {
   extendColumnSelectionTo,
   selectCalendarItem,
   selectColumnItem,
+  setCalendarAnchor,
   toggleCalendarSelection,
   toggleColumnSelection,
 } from "../state/nav";
@@ -38,7 +39,9 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
     view === "calendar" ? s.view.calendarSelection.includes(item.id) : s.view.columnsSelection.includes(item.id),
   );
   const focusedHere = useApp((s) => s.view.focusedView === view);
-  const editing = useApp((s) => s.edit?.itemId === item.id);
+  // An item can show in both views (e.g. a dated folder's child); only the
+  // focused view gets the editor, or the two would fight over focus.
+  const editing = useApp((s) => s.edit?.itemId === item.id && s.view.focusedView === view);
   const style = useApp((s) => styleFor(s, item));
   const tags = useApp((s) => s.doc?.config.tags);
   const stats = useApp((s) => (isContainerType(item.type) ? statsOf(s.doc).get(item.id) : undefined));
@@ -52,6 +55,15 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
   const dragging = useApp((s) => s.drag?.status === "active" && !s.drag.copy && s.drag.ids.includes(item.id));
   const previewAfter = useApp((s) => s.createPreview?.afterId === item.id);
   const deletePreview = useApp((s) => !!s.deletePreview?.includes(item.id));
+  // Calendar: indent under a dated folder on the same day.
+  const dayDepth = useApp((s) => (view === "calendar" ? indexOf(s.doc).dayDepth.get(item.id) ?? 0 : 0));
+  // Columns: a folder shows the span of dates inside it.
+  const spanKey = useApp((s) => {
+    if (view !== "columns" || item.type !== "folder") return null;
+    const sp = folderSpan(s.doc, item.id);
+    return sp ? `${sp.from}|${sp.to}` : null;
+  });
+  const highlightKind = useApp((s) => (s.highlightPreview?.ids.includes(item.id) ? s.highlightPreview.kind : null));
 
   const onMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 || editing) return;
@@ -119,6 +131,7 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
     dropHint && `drop-${dropHint}`,
     previewAfter && "preview-after",
     deletePreview && "is-delete-preview",
+    highlightKind && `is-highlight-preview highlight-${highlightKind}`,
     dropHint === "into" && !isContainerType(item.type) && "will-convert",
     colorClass(style.accentColor),
   ]
@@ -142,7 +155,10 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
   }
 
   const itemTags = item.tags.length && tags ? tags.filter((t) => item.tags.includes(t.id)) : [];
-  const day = view === "columns" ? item.scheduleDate : null;
+  const [spanFrom, spanTo] = spanKey ? spanKey.split("|") : [null, null];
+  const day = view === "columns" ? (spanFrom ?? item.scheduleDate) : null;
+  const dayTo = spanTo && spanTo !== spanFrom ? spanTo : null;
+  const dayLabel = (d: string) => relativeDayLabel(d, today()) ?? formatShortDay(d);
   const progress = stats?.progression ?? -1;
 
   return (
@@ -156,6 +172,8 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
       onContextMenu={onContextMenu}
       role="treeitem"
       aria-selected={selected}
+      style={dayDepth ? ({ "--day-depth": dayDepth } as React.CSSProperties) : undefined}
+      data-day-depth={dayDepth || undefined}
     >
       {item.type === "task" && (
         <button
@@ -192,17 +210,19 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
       <div className="item-meta">
         {day && (
           <button
-            className={`date-chip ${day < today() && !item.finished ? "is-overdue" : ""}`}
-            title="Open in calendar"
+            className={`date-chip ${(dayTo ?? day) < today() && !item.finished ? "is-overdue" : ""}`}
+            title={dayTo ? "Dates inside this folder — open in calendar" : "Open in calendar"}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               focusView("calendar");
-              selectCalendarItem(item.id);
+              if (item.scheduleDate) selectCalendarItem(item.id);
+              else setCalendarAnchor(day);
             }}
           >
             <CalendarDays size={11} />
-            {relativeDayLabel(day, today()) ?? formatShortDay(day)}
+            {dayLabel(day)}
+            {dayTo && <> – {dayLabel(dayTo)}</>}
           </button>
         )}
         {view === "calendar" && item.parentId && (

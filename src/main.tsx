@@ -6,17 +6,10 @@ import "./styles/app.css";
 import "./styles/layout.css";
 import "./styles/overlays.css";
 import { App } from "./App";
-import { initPlatform, type Platform } from "./platform";
+import { initPlatform, revealWindow } from "./platform";
 import { loadSettings, openPath, startPersistence, startWatchingDisk } from "./state/files";
 import { cliOpenedSomething, startCli } from "./state/cli";
 import { get, set, toast } from "./state/store";
-
-let shown = false;
-function reveal(p: Platform | null) {
-  if (shown || !p) return;
-  shown = true;
-  p.showWindow().catch(() => {});
-}
 
 function showFatal(e: unknown) {
   console.error(e);
@@ -29,7 +22,7 @@ function showFatal(e: unknown) {
 async function boot() {
   const platform = await initPlatform();
   // Never leave the (initially hidden) window invisible, even if startup stalls.
-  setTimeout(() => reveal(platform), 2500);
+  setTimeout(revealWindow, 2500);
   window.addEventListener("error", (e) => toast(`Error: ${e.message}`, "error", 8000));
   window.addEventListener("unhandledrejection", (e) => toast(`Error: ${String(e.reason)}`, "error", 8000));
 
@@ -49,12 +42,11 @@ async function boot() {
   if (!doc && !cliOpenedSomething() && prefs.openLastDocumentOnStartup && prefs.lastOpenedDocumentPath) {
     await openPath(prefs.lastOpenedDocumentPath);
   }
+  // App reveals the window once it has rendered with ready = true.
   set({ ready: true });
-  // Reveal once the first frame with the document is painted.
-  requestAnimationFrame(() => requestAnimationFrame(() => reveal(platform)));
 }
 
 boot().catch((e) => {
   showFatal(e);
-  initPlatform().then(reveal).catch(() => {});
+  initPlatform().then(revealWindow).catch(() => {});
 });

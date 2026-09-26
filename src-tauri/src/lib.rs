@@ -8,6 +8,7 @@ mod cli;
 mod mqtt;
 mod portable;
 mod printing;
+mod remote;
 mod state;
 
 use std::sync::atomic::Ordering;
@@ -101,6 +102,7 @@ pub fn run() {
         )
         .manage(AppState::new(startup_payload, startup_endpoint))
         .manage(bluetooth::BluetoothState::default())
+        .manage(remote::RemoteState::default())
         .invoke_handler(tauri::generate_handler![
             show_window,
             cli::get_startup_payload,
@@ -120,6 +122,9 @@ pub fn run() {
             mqtt::send_mqtt_messages_batch,
             portable::portable_status,
             portable::enable_portable_mode,
+            remote::remote_stack_start,
+            remote::remote_stack_stop,
+            remote::remote_stack_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Cascade");

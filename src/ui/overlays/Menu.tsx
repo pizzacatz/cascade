@@ -53,6 +53,11 @@ export function Menu({ x, y, entries, onClose, isSub, onRun, onClearPreview }: P
       if (selectable(i)) break;
     }
     setActive(i);
+    // Keyboard navigation previews like hovering does.
+    if (!isSub) {
+      onClearPreview?.();
+      entries[i]?.onHover?.();
+    }
   };
 
   const activate = (i: number) => {

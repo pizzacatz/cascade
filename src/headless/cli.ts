@@ -17,7 +17,9 @@ Reading
   list    [--parent REF] [--depth N|all] [--hide-finished]   Items in a space/folder
   show    ITEM                                                One item (with children)
   search  [QUERY] [--type T]... [--tag NAME]... [--include-trash] [--hide-finished]
-  agenda  [--date D]                                          A day's items (+ overdue today)
+  agenda  [--from D] [--to D | --days N]                      Items per day (default: the next 7 days)
+  agenda  --date D                                            One day's items (+ overdue when D is today)
+  overdue                                                     Unfinished work scheduled before today
   spaces | tags                                               Spaces / tags in the document
 
 Writing
@@ -30,7 +32,19 @@ Writing
   delete    ITEM... [--permanent]    (moves to Trash; items already in Trash are deleted)
   add-space NAME
   prepare   --date D          Copy recurring templates onto a day
+  roll-over [--date D]        Move unfinished overdue work onto D (default today)
   init      FILE [--template ${core.TEMPLATE_IDS.join("|")}]
+
+Backups and export
+  backups                     Automatic backups of the document, newest first
+  restore   REF               Replace the document with backup REF (1 = newest, or an id);
+                              the current content is backed up first
+  export-ics [--out FILE.ics] Write dated tasks and folders as an iCalendar file
+                              (default: next to the document). An existing .ics next to
+                              the document is also refreshed after every edit.
+
+  Before editing, the document is backed up to the app's backup folder (at most one
+  copy every 2 minutes), so edits can be undone with "Restore from Backup…" or restore.
 
 Other
   mcp [--file DEFAULT.col]    Run the MCP server on stdio (for LLM agents)
@@ -226,15 +240,70 @@ async function run(argv: string[]): Promise<number> {
       return 0;
     }
     case "agenda": {
-      const r = core.withDoc(file, () => core.agenda(one(p, "date") ?? p.positional[0] ?? "today"), false);
+      const single = one(p, "date") ?? p.positional[0];
+      if (single) {
+        const r = core.withDoc(file, () => core.agenda(single), false);
+        emit(r, () => {
+          console.log(r.date);
+          printItems(r.items, true);
+          if (r.overdue.length) {
+            console.log("\nOverdue");
+            printItems(r.overdue, true);
+          }
+        });
+        return 0;
+      }
+      const days = one(p, "days");
+      if (days !== undefined && !/^\d+$/.test(days)) throw new UsageError("--days needs a number");
+      const r = core.withDoc(file, () => core.agendaRange({ from: one(p, "from"), to: one(p, "to"), days: days ? Number(days) : undefined }), false);
       emit(r, () => {
-        console.log(r.date);
-        printItems(r.items, true);
         if (r.overdue.length) {
-          console.log("\nOverdue");
+          console.log("Overdue");
           printItems(r.overdue, true);
+          console.log();
+        }
+        for (const d of r.days) {
+          console.log(d.date);
+          if (d.items.length) printItems(d.items, true);
+          else console.log("    (nothing)");
         }
       });
+      return 0;
+    }
+    case "overdue": {
+      const r = core.withDoc(file, core.overdue, false);
+      emit(r, () => printItems(r, true));
+      return 0;
+    }
+    case "roll-over":
+    case "rollover": {
+      const r = core.withDoc(file, () => core.rollOver(one(p, "date") ?? p.positional[0] ?? "today"));
+      emit(r, () => {
+        console.log(r.moved.length ? `Moved ${r.moved.length} item(s) to ${r.date}` : "Nothing overdue");
+        if (r.moved.length) printItems(r.moved, true);
+      });
+      return 0;
+    }
+    case "backups": {
+      const r = core.listDocBackups(file);
+      emit(r, () => {
+        if (!r.backups.length) console.log("(no backups yet)");
+        for (const b of r.backups) {
+          const when = new Date(b.time).toLocaleString();
+          console.log(`${String(b.ref).padStart(2)}  ${when}  ${b.items ?? "?"} items, ${b.tasks ?? "?"} tasks, ${b.size} bytes  (${b.id})`);
+        }
+      });
+      return 0;
+    }
+    case "restore": {
+      const ref = one(p, "backup") ?? need(p, "REF (1 = newest backup, or an id)")[0];
+      const r = core.restoreDocBackup(file, ref);
+      emit(r, () => console.log(`Restored ${r.path} from the backup of ${new Date(r.restoredTime).toLocaleString()} (previous content saved as ${r.previousBackup})`));
+      return 0;
+    }
+    case "export-ics": {
+      const r = core.exportIcs(file, one(p, "out") ?? p.positional[0]);
+      emit(r, () => console.log(`Wrote ${r.events} event(s) to ${r.path}`));
       return 0;
     }
     case "spaces": {

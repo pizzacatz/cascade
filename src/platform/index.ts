@@ -20,6 +20,13 @@ export interface PortableStatus {
   canEnable: boolean;
 }
 
+/** One automatic backup of a document; `id` is its file name. */
+export interface BackupEntry {
+  id: string;
+  time: number;
+  size: number | null;
+}
+
 export interface FileEntry {
   path: string;
   name: string;
@@ -38,6 +45,11 @@ export interface Platform {
   stat(path: string): Promise<{ mtime: number; size: number } | null>;
   writeBackup(path: string, text: string): Promise<void>;
   pruneBackups(): Promise<void>;
+  /** Backups of the document at `path`, newest first. */
+  listBackups(path: string): Promise<BackupEntry[]>;
+  readBackup(path: string, id: string): Promise<string>;
+  /** Ask where to save an exported file and write it; returns the path, or null if cancelled. */
+  saveExport(defaultName: string, text: string, filter: { name: string; extensions: string[] }): Promise<string | null>;
   // Preferences / settings stores
   loadStore(name: string): Promise<unknown>;
   saveStore(name: string, value: unknown): Promise<void>;
@@ -66,22 +78,8 @@ export interface Platform {
 export const basename = (path: string) => path.split(/[\\/]/).pop() ?? path;
 export const displayName = (path: string) => basename(path).replace(/\.col$/i, "");
 
-// ---------------------------------------------------------------------------
-// FNV-1a 64-bit, used to name backup folders/files deterministically.
-// ---------------------------------------------------------------------------
-export function fnv1a64(text: string): string {
-  let h = 0xcbf29ce484222325n;
-  const prime = 0x100000001b3n;
-  const bytes = new TextEncoder().encode(text);
-  for (const b of bytes) {
-    h ^= BigInt(b);
-    h = (h * prime) & 0xffffffffffffffffn;
-  }
-  return h.toString(16).padStart(16, "0");
-}
-
-export const BACKUP_MAX_PER_DOC = 10;
-export const BACKUP_MAX_AGE_MS = 5 * 24 * 3600 * 1000;
+export { fnv1a64, BACKUP_MAX_PER_DOC, BACKUP_MAX_AGE_MS } from "../model/hash";
+import { fnv1a64, BACKUP_MAX_PER_DOC, BACKUP_MAX_AGE_MS, parseBackupName } from "../model/hash";
 
 // ---------------------------------------------------------------------------
 // Tauri implementation
@@ -158,6 +156,33 @@ async function tauriPlatform(): Promise<Platform> {
         await fs.remove(await pathApi.join(dir, e.name)).catch(() => {});
       }
     },
+    async listBackups(path) {
+      const dir = await pathApi.join(await backupRoot(), fnv1a64(path));
+      if (!(await fs.exists(dir))) return [];
+      const out: BackupEntry[] = [];
+      for (const e of await fs.readDir(dir)) {
+        const meta = e.isFile ? parseBackupName(e.name) : null;
+        if (!meta) continue;
+        const size = await fs
+          .stat(await pathApi.join(dir, e.name))
+          .then((st) => st.size)
+          .catch(() => null);
+        out.push({ id: e.name, time: meta.time, size });
+      }
+      return out.sort((a, b) => b.time - a.time);
+    },
+    async readBackup(path, id) {
+      if (!parseBackupName(id)) throw new Error(`Not a backup: ${id}`);
+      return fs.readTextFile(await pathApi.join(await backupRoot(), fnv1a64(path), id));
+    },
+    async saveExport(defaultName, text, filter) {
+      const r = await dialog.save({ defaultPath: defaultName, filters: [filter] });
+      if (!r) return null;
+      const ext = filter.extensions[0];
+      const path = ext && !r.toLowerCase().endsWith(`.${ext}`) ? `${r}.${ext}` : r;
+      await fs.writeTextFile(path, text);
+      return path;
+    },
     async pruneBackups() {
       const root = await backupRoot();
       if (!(await fs.exists(root))) return;
@@ -214,6 +239,7 @@ async function tauriPlatform(): Promise<Platform> {
 
 const LS_DOC_PREFIX = "cascade:doc:";
 const LS_STORE_PREFIX = "cascade:store:";
+const LS_BACKUP_PREFIX = "cascade:backup:";
 
 function browserPlatform(): Platform {
   const ls = window.localStorage;
@@ -248,8 +274,40 @@ function browserPlatform(): Platform {
     },
     exists: async (path) => ls.getItem(docKey(path)) !== null,
     stat: async () => null,
-    writeBackup: async () => {},
+    // Backups live in localStorage too, so restoring can be tried in a browser.
+    async writeBackup(path, text) {
+      const prefix = `${LS_BACKUP_PREFIX}${fnv1a64(path)}:`;
+      ls.setItem(`${prefix}${Date.now()}.${fnv1a64(text)}.col`, text);
+      const keys = Object.keys(ls)
+        .filter((k) => k.startsWith(prefix))
+        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+      for (const k of keys.slice(BACKUP_MAX_PER_DOC)) ls.removeItem(k);
+    },
     pruneBackups: async () => {},
+    async listBackups(path) {
+      const prefix = `${LS_BACKUP_PREFIX}${fnv1a64(path)}:`;
+      return Object.keys(ls)
+        .filter((k) => k.startsWith(prefix))
+        .flatMap((k) => {
+          const id = k.slice(prefix.length);
+          const meta = parseBackupName(id);
+          return meta ? [{ id, time: meta.time, size: ls.getItem(k)?.length ?? null }] : [];
+        })
+        .sort((a, b) => b.time - a.time);
+    },
+    async readBackup(path, id) {
+      const v = ls.getItem(`${LS_BACKUP_PREFIX}${fnv1a64(path)}:${id}`);
+      if (v === null) throw new Error(`No such backup: ${id}`);
+      return v;
+    },
+    async saveExport(defaultName, text, filter) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([text], { type: filter.extensions[0] === "ics" ? "text/calendar" : "text/plain" }));
+      a.download = defaultName;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      return defaultName;
+    },
     async loadStore(name) {
       try {
         return JSON.parse(ls.getItem(LS_STORE_PREFIX + name) ?? "{}");
@@ -326,4 +384,16 @@ export async function initPlatform(): Promise<Platform> {
 export function platform(): Platform {
   if (!instance) throw new Error("Platform not initialised");
   return instance;
+}
+
+let windowShown = false;
+/**
+ * Show the (initially hidden) main window, once. Called after React has
+ * committed the first frame with the document. It must not wait for
+ * requestAnimationFrame: WebKitGTK does not run frames for a hidden window.
+ */
+export function revealWindow(): void {
+  if (windowShown || !instance) return;
+  windowShown = true;
+  instance.showWindow().catch(() => {});
 }

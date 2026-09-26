@@ -6,6 +6,7 @@ import { buildIndex, type DocIndex } from "../model/tree";
 import { computeStats, type StatsMap } from "../model/progression";
 import { resolveStyle, sortRules, EMPTY_STYLE, type FormatContext, type ResolvedStyle } from "../model/formatting";
 import { todayKey } from "../model/dates";
+import { dateSpan } from "../model/schedule";
 import { get, useApp, type AppState } from "./store";
 
 const EMPTY_DOC: Doc = {
@@ -91,4 +92,17 @@ export function selectionOf(s: AppState): string[] {
 export function selectedItems(s: AppState): Item[] {
   const items = s.doc?.items ?? {};
   return selectionOf(s).map((id) => items[id]);
+}
+
+// Date span of a folder (itself plus unfinished dated descendants), per document.
+const spanCache = new WeakMap<Doc["items"], Map<string, { from: string; to: string } | null>>();
+export function folderSpan(doc: Doc | null, folderId: string): { from: string; to: string } | null {
+  if (!doc) return null;
+  let m = spanCache.get(doc.items);
+  if (!m) spanCache.set(doc.items, (m = new Map()));
+  if (!m.has(folderId)) {
+    const ix = indexOf(doc);
+    m.set(folderId, dateSpan(folderId, ix.items, ix.children));
+  }
+  return m.get(folderId)!;
 }

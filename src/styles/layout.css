@@ -628,7 +628,32 @@
 }
 .calendar-month {
   font-weight: 600;
-  margin-left: 8px;
+  margin-left: 4px;
+  gap: 4px;
+}
+.month-button-wrap {
+  position: relative;
+}
+.day-picker-popover {
+  z-index: 30;
+  width: 320px;
+  padding: 0;
+}
+.picker-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.day-rollover {
+  color: var(--text-faint);
+  gap: 3px;
+}
+.day-rollover:hover,
+.overdue-btn {
+  color: var(--accent);
+}
+.overdue-btn {
+  gap: 4px;
 }
 .calendar-strip {
   flex: 1;
@@ -815,7 +840,7 @@
 }
 .welcome-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
 .welcome-action {
@@ -1457,4 +1482,86 @@ button.date-chip:hover {
 .welcome-version {
   margin: -12px 0 0;
   font-size: 11px;
+}
+
+/* Remote Stack panel (runner button popover) */
+.remote-stack {
+  position: relative;
+  display: inline-flex;
+}
+.remote-stack .remote-stack-panel {
+  left: auto;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+.remote-stack-panel p {
+  margin: 0;
+  font-size: 12px;
+}
+.remote-stack-title {
+  font-weight: 650;
+}
+.remote-stack-qr {
+  align-self: center;
+  line-height: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.remote-stack-qr svg {
+  width: 180px;
+  height: 180px;
+}
+.remote-stack-url {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+/* Hover preview for copy / cut / duplicate / move / print / stack menu commands */
+.item-row.is-highlight-preview {
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 50%, transparent);
+}
+.item-row.is-highlight-preview.highlight-cut {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 60%, transparent);
+  outline: 1px dashed color-mix(in oklab, var(--accent) 70%, transparent);
+  outline-offset: -1px;
+  opacity: 0.6;
+}
+/* Long columns: let the browser skip layout/paint of off-screen rows. Rows
+   that may draw outside their box (hovered popovers, selection, editing, drop
+   lines while dragging) are left uncontained. */
+.column-body.is-long > .item-row:not(:hover):not(.is-selected):not(.is-editing):not(.is-open):not(.preview-after) {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto var(--row-h);
+}
+.app.is-dragging .column-body.is-long > .item-row {
+  content-visibility: visible;
+}
+
+.drag-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* Calendar: child items indented under their dated folder. */
+.item-row[data-day-depth] {
+  padding-left: calc(10px + var(--day-depth) * 18px);
+}
+
+.typed-date-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  align-self: center;
+  padding: 1px 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+  color: var(--accent);
 }

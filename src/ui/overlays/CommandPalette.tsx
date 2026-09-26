@@ -9,7 +9,7 @@ import {
   CalendarDays, Columns3, Sun, Moon, Monitor, Trash2, CopyPlus, Copy, Scissors, CheckSquare, Tag, CalendarPlus,
   FolderInput, FileText, LayoutTemplate, CalendarCheck, Eraser, ListX, Plus, Info, Bug, ArrowUpDown, BookmarkCheck,
   Settings2, CalendarX, Undo2, Redo2, Keyboard, Pencil, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, MousePointer2,
-  Shapes, Palette,
+  Shapes, Palette, History, CalendarArrowDown,
 } from "lucide-react";
 import type { Color, Item, ItemType } from "../../model/types";
 import { COLORS, ITEM_TYPES, TRASH_SPACE_ID, isContainerType, isTaggableType } from "../../model/types";
@@ -27,7 +27,9 @@ import { copyWithToast, cutSelection } from "../../state/clipboard";
 import { closeDocument, newDocument, openDialog, openPath, clearRecentFiles, fromStoredPath } from "../../state/files";
 import { closeOverlay, openOverlay, promptText, resumeInlineEdit } from "../../state/overlays";
 import { openPrint } from "../../state/printing";
+import { exportCalendar } from "../../state/exports";
 import { openStack } from "../../state/stack";
+import { rollOverOverdue } from "../../state/schedule";
 import { createSpace, createTag, sortedTags, updateSpace } from "../../state/config";
 import { historyStep, keyLabel } from "../../state/shortcuts";
 import { DOC_TEMPLATES } from "../../state/templates";
@@ -206,6 +208,9 @@ function rootRows(s: AppState): Row[] {
       ? [
           { id: "doc-settings", label: "Document Settings", icon: <Settings2 size={15} />, hint: keyLabel("doc-settings"), keywords: "spaces tags formatting recurrence rules progression", run: () => openOverlay({ kind: "docSettings", tab: "general" }) },
           { id: "prepare", label: "Prepare Recurring Tasks…", icon: <CalendarCheck size={15} />, run: () => openOverlay({ kind: "prepare" }) },
+          { id: "roll-over", label: "Move Unfinished Tasks to Today", icon: <CalendarCheck size={15} />, keywords: "overdue roll over carry forward reschedule late past", run: () => void rollOverOverdue() },
+          { id: "restore-backup", label: "Restore from Backup…", icon: <History size={15} />, keywords: "backup snapshot history recover revert undo", run: () => openOverlay({ kind: "backups" }) },
+          { id: "export-ics", label: "Export Calendar (.ics)…", icon: <CalendarArrowDown size={15} />, keywords: "ical icalendar export calendar google outlook subscribe", run: () => void exportCalendar() },
           { id: "remove-empty", label: "Remove Empty Items", icon: <Eraser size={15} />, run: removeEmptyItems },
           { id: "trash-finished", label: "Delete Finished Items (All Data)", icon: <ListX size={15} />, run: () => trashFinished() },
           { id: "close-file", label: "Close Document", icon: <XIcon size={15} />, hint: keyLabel("close-file"), run: () => void closeDocument() },

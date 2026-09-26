@@ -14,6 +14,8 @@ import {
   Printer,
   AlertTriangle,
   CalendarDays,
+  FolderOpen,
+  Hash,
 } from "lucide-react";
 import type {
   Condition,
@@ -22,6 +24,8 @@ import type {
   NumberOperator,
   RecurrenceRule,
   ScheduleOperator,
+  Space,
+  Tag,
   TextOperator,
   Weekday,
 } from "../../model/types";
@@ -30,7 +34,7 @@ import { isUserSpace, sortSpaces, breadcrumb, spaceOf } from "../../model/tree";
 import { sortRules } from "../../model/formatting";
 import { describeRecurrence, recurrenceMatches, toRRule } from "../../model/recurrence";
 import { addDays, formatLongDay } from "../../model/dates";
-import { get, useApp } from "../../state/store";
+import { get, toast, useApp } from "../../state/store";
 import { indexOf, today } from "../../state/derived";
 import { confirmAction, openOverlay } from "../../state/overlays";
 import {
@@ -43,6 +47,10 @@ import {
   deleteRule,
   deleteSpace,
   deleteTag,
+  duplicateSpace,
+  duplicateTag,
+  placeSpace,
+  placeTag,
   duplicateRule,
   moveRecurrenceRule,
   moveRule,
@@ -57,7 +65,9 @@ import {
   updateSpace,
   updateTag,
 } from "../../state/config";
-import { displayName } from "../../platform";
+import { displayName, platform } from "../../platform";
+import { switchSpace } from "../../state/nav";
+import { ReorderList } from "./ReorderList";
 import { ColorPicker, IconButton } from "../Pickers";
 import { Icon } from "../icons";
 import { Modal, SettingsSwitcher } from "./Modal";
@@ -152,75 +162,150 @@ function GeneralTab() {
 
 function SpacesTab() {
   const spaces = useApp((s) => s.doc?.config.spaces ?? []);
+  const currentSpace = useApp((s) => s.view.currentSpaceId);
   const sorted = sortSpaces(spaces).filter((s) => s.id !== TREE_SPACE_ID);
   const active = sorted.filter((s) => !s.archived);
   const archived = sorted.filter((s) => s.archived);
-  const row = (sp: (typeof sorted)[number]) => (
-    <div key={sp.id} className="settings-row">
-      <IconButton value={sp.icon} onChange={(icon) => updateSpace(sp.id, { icon })} />
-      <input
-        className="input grow"
-        defaultValue={sp.name}
-        disabled={sp.id === TRASH_SPACE_ID}
-        onBlur={(e) => e.target.value.trim() && e.target.value !== sp.name && updateSpace(sp.id, { name: e.target.value.trim() })}
-        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-        aria-label="Space name"
-      />
-      <ColorPicker value={sp.color} onChange={(color) => updateSpace(sp.id, { color })} />
-      {!sp.archived && (
-        <>
-          <button className="btn btn-ghost btn-sm btn-icon" aria-label="Move up" onClick={() => moveSpace(sp.id, -1)}>
-            <ArrowUp size={14} />
+  const [selected, setSelected] = useState<string | undefined>(currentSpace);
+  const sp = sorted.find((x) => x.id === selected) ?? active[0];
+  const renderRow = (x: Space) => (
+    <>
+      <span className={`space-dot ${x.color && x.color !== "default" ? `c-${x.color}` : ""}`}>
+        <Icon name={x.icon} size={14} />
+      </span>
+      <span className="grow ellipsis">{x.name}</span>
+      {!isUserSpace(x.id) && <span className="badge">Built-in</span>}
+    </>
+  );
+  return (
+    <div className="split-pane">
+      <div className="split-list">
+        <p className="field-hint" style={{ margin: "0 0 6px" }}>
+          Separate top-level areas of the document. Drag to reorder.
+        </p>
+        <ReorderList
+          label="Spaces"
+          items={active}
+          selectedId={sp?.id}
+          onSelect={setSelected}
+          onPlace={placeSpace}
+          onMove={moveSpace}
+          render={renderRow}
+        />
+        <div className="row" style={{ marginTop: 8 }}>
+          <button className="btn btn-sm" onClick={() => setSelected(createSpace("New space", "folder", "default", { open: false }) ?? undefined)}>
+            <Plus size={13} /> New space
           </button>
-          <button className="btn btn-ghost btn-sm btn-icon" aria-label="Move down" onClick={() => moveSpace(sp.id, 1)}>
-            <ArrowDown size={14} />
+        </div>
+        {archived.length > 0 && (
+          <>
+            <div className="settings-subhead">Archived</div>
+            <ReorderList
+              label="Archived spaces"
+              items={archived}
+              selectedId={sp?.id}
+              onSelect={setSelected}
+              onPlace={() => {}}
+              onMove={() => {}}
+              canReorder={() => false}
+              render={renderRow}
+            />
+          </>
+        )}
+      </div>
+      <div className="split-detail">{sp ? <SpaceDetail key={`${sp.id}:${sp.name}`} sp={sp} onSelect={setSelected} /> : <p className="muted">No spaces.</p>}</div>
+    </div>
+  );
+}
+
+function SpaceDetail({ sp, onSelect }: { sp: Space; onSelect: (id: string | undefined) => void }) {
+  const count = useApp(() => spaceItemCount(sp.id));
+  const user = isUserSpace(sp.id);
+  return (
+    <div className="stack-v">
+      <div className="row">
+        <strong className="grow ellipsis">{sp.name}</strong>
+        {!sp.archived && (
+          <>
+            <button className="btn btn-ghost btn-sm btn-icon" aria-label="Move up" title="Move up (Alt+↑)" onClick={() => moveSpace(sp.id, -1)}>
+              <ArrowUp size={14} />
+            </button>
+            <button className="btn btn-ghost btn-sm btn-icon" aria-label="Move down" title="Move down (Alt+↓)" onClick={() => moveSpace(sp.id, 1)}>
+              <ArrowDown size={14} />
+            </button>
+          </>
+        )}
+      </div>
+      <div className="field">
+        <span className="field-label">Name</span>
+        <input
+          className="input"
+          defaultValue={sp.name}
+          disabled={sp.id === TRASH_SPACE_ID}
+          onBlur={(e) => e.target.value.trim() && e.target.value !== sp.name && updateSpace(sp.id, { name: e.target.value.trim() })}
+          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+          aria-label="Space name"
+        />
+      </div>
+      <div className="field">
+        <span className="field-label">Icon</span>
+        <IconButton value={sp.icon} onChange={(icon) => updateSpace(sp.id, { icon })} />
+      </div>
+      <div className="field">
+        <span className="field-label">Color</span>
+        <ColorPicker value={sp.color} onChange={(color) => updateSpace(sp.id, { color })} />
+      </div>
+      <div className="field">
+        <span className="field-label">Contents</span>
+        <span className="muted">
+          {count} item{count === 1 ? "" : "s"}
+          {sp.archived ? " · archived" : ""}
+        </span>
+      </div>
+      <div className="row wrap">
+        {!sp.archived && (
+          <button className="btn btn-sm" onClick={() => switchSpace(sp.id)}>
+            <FolderOpen size={13} /> Open
           </button>
-        </>
-      )}
-      {isUserSpace(sp.id) ? (
-        <>
+        )}
+        {sp.id !== TRASH_SPACE_ID && (
           <button
-            className="btn btn-ghost btn-sm btn-icon"
-            aria-label={sp.archived ? "Unarchive" : "Archive"}
-            title={sp.archived ? "Unarchive" : "Archive"}
-            onClick={() => setSpaceArchived(sp.id, !sp.archived)}
+            className="btn btn-sm"
+            onClick={() => onSelect(duplicateSpace(sp.id, { open: false }) ?? undefined)}
           >
-            {sp.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+            <CopyPlus size={13} /> Duplicate
           </button>
+        )}
+        <button className="btn btn-sm" onClick={() => void platform().writeClipboard(sp.id).then(() => toast("Space ID copied"))}>
+          <Hash size={13} /> Copy ID
+        </button>
+        {user && (
+          <button className="btn btn-sm" onClick={() => setSpaceArchived(sp.id, !sp.archived)}>
+            {sp.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />} {sp.archived ? "Unarchive" : "Archive"}
+          </button>
+        )}
+        {user && (
           <button
-            className="btn btn-ghost btn-sm btn-icon"
+            className="btn btn-sm btn-danger"
             aria-label="Delete space"
             onClick={() =>
               confirmAction({
                 title: `Delete “${sp.name}”?`,
-                message: `${spaceItemCount(sp.id)} item${spaceItemCount(sp.id) === 1 ? "" : "s"} will move to Trash. Formatting conditions referencing this space are removed.`,
+                message: `${count} item${count === 1 ? "" : "s"} will move to Trash. Formatting conditions referencing this space are removed.`,
                 confirmLabel: "Delete",
                 danger: true,
-                onConfirm: () => deleteSpace(sp.id),
+                onConfirm: () => {
+                  deleteSpace(sp.id);
+                  onSelect(undefined);
+                },
               })
             }
           >
-            <Trash2 size={14} />
+            <Trash2 size={13} /> Delete
           </button>
-        </>
-      ) : (
-        <span className="settings-row-spacer" />
-      )}
-    </div>
-  );
-  return (
-    <div className="stack-v">
-      <p className="field-hint">Spaces are separate top-level areas of the document. Home and Trash are built in.</p>
-      <div className="settings-list">{active.map(row)}</div>
-      <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => createSpace()}>
-        <Plus size={14} /> New space
-      </button>
-      {archived.length > 0 && (
-        <>
-          <h4 className="settings-subhead">Archived</h4>
-          <div className="settings-list">{archived.map(row)}</div>
-        </>
-      )}
+        )}
+      </div>
+      {!user && <p className="field-hint">{sp.id === TRASH_SPACE_ID ? "Trash is built in: deleted items land here." : "Home is built in and cannot be archived or deleted."}</p>}
     </div>
   );
 }
@@ -229,59 +314,111 @@ function SpacesTab() {
 
 function TagsTab() {
   const tags = useApp((s) => s.doc?.config.tags ?? []);
+  const sorted = sortedTags(tags);
+  const [selected, setSelected] = useState<string | undefined>(sorted[0]?.id);
   const [name, setName] = useState("");
+  const tag = sorted.find((t) => t.id === selected) ?? sorted[0];
   const add = () => {
     if (!name.trim()) return;
-    createTag(name.trim());
+    setSelected(createTag(name.trim()) ?? undefined);
     setName("");
   };
   return (
-    <div className="stack-v">
-      <p className="field-hint">Tags can be attached to tasks, folders and templates, filtered in search, and used by formatting rules.</p>
-      <div className="settings-list">
-        {sortedTags(tags).map((t) => (
-          <div key={t.id} className="settings-row">
-            <IconButton value={t.icon} onChange={(icon) => updateTag(t.id, { icon })} />
-            <input
-              className="input grow"
-              defaultValue={t.name}
-              onBlur={(e) => e.target.value.trim() && e.target.value !== t.name && updateTag(t.id, { name: e.target.value.trim() })}
-              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-              aria-label="Tag name"
-            />
-            <ColorPicker value={t.color} onChange={(color) => updateTag(t.id, { color })} />
-            <button className="btn btn-ghost btn-sm btn-icon" aria-label="Move up" onClick={() => moveTag(t.id, -1)}>
-              <ArrowUp size={14} />
-            </button>
-            <button className="btn btn-ghost btn-sm btn-icon" aria-label="Move down" onClick={() => moveTag(t.id, 1)}>
-              <ArrowDown size={14} />
-            </button>
-            <button className="btn btn-ghost btn-sm btn-icon" aria-label="Duplicate tag" title="Duplicate" onClick={() => createTag(`${t.name} copy`, t.color, t.icon)}>
-              <CopyPlus size={14} />
-            </button>
-            <button
-              className="btn btn-ghost btn-sm btn-icon"
-              aria-label="Delete tag"
-              onClick={() =>
-                confirmAction({
-                  title: `Delete tag “${t.name}”?`,
-                  message: `This tag will be removed from ${tagUseCount(t.id)} item${tagUseCount(t.id) === 1 ? "" : "s"} and from formatting rules that reference it.`,
-                  confirmLabel: "Delete",
-                  danger: true,
-                  onConfirm: () => deleteTag(t.id),
-                })
-              }
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-        ))}
+    <div className="split-pane">
+      <div className="split-list">
+        <p className="field-hint" style={{ margin: "0 0 6px" }}>
+          Attach to tasks, folders and templates; filter in search; use in formatting rules. Drag to reorder.
+        </p>
+        <ReorderList
+          label="Tags"
+          items={sorted}
+          selectedId={tag?.id}
+          onSelect={setSelected}
+          onPlace={placeTag}
+          onMove={moveTag}
+          render={(t) => (
+            <>
+              <span className={`space-dot ${t.color && t.color !== "default" ? `c-${t.color}` : ""}`}>
+                <Icon name={t.icon} size={14} />
+              </span>
+              <span className="grow ellipsis">{t.name}</span>
+            </>
+          )}
+        />
         {tags.length === 0 && <p className="muted">No tags yet.</p>}
+        <div className="row" style={{ marginTop: 8 }}>
+          <input className="input input-sm grow" placeholder="New tag name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+          <button className="btn btn-sm" onClick={add} disabled={!name.trim()} aria-label="Add tag">
+            <Plus size={13} /> Add
+          </button>
+        </div>
       </div>
+      <div className="split-detail">{tag ? <TagDetail key={`${tag.id}:${tag.name}`} tag={tag} onSelect={setSelected} /> : <p className="muted">Create a tag to label items.</p>}</div>
+    </div>
+  );
+}
+
+function TagDetail({ tag: t, onSelect }: { tag: Tag; onSelect: (id: string | undefined) => void }) {
+  const uses = useApp(() => tagUseCount(t.id));
+  return (
+    <div className="stack-v">
       <div className="row">
-        <input className="input" placeholder="New tag name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
-        <button className="btn" onClick={add} disabled={!name.trim()}>
-          <Plus size={14} /> Add tag
+        <strong className="grow ellipsis">{t.name}</strong>
+        <button className="btn btn-ghost btn-sm btn-icon" aria-label="Move up" title="Move up (Alt+↑)" onClick={() => moveTag(t.id, -1)}>
+          <ArrowUp size={14} />
+        </button>
+        <button className="btn btn-ghost btn-sm btn-icon" aria-label="Move down" title="Move down (Alt+↓)" onClick={() => moveTag(t.id, 1)}>
+          <ArrowDown size={14} />
+        </button>
+      </div>
+      <div className="field">
+        <span className="field-label">Name</span>
+        <input
+          className="input"
+          defaultValue={t.name}
+          onBlur={(e) => e.target.value.trim() && e.target.value !== t.name && updateTag(t.id, { name: e.target.value.trim() })}
+          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+          aria-label="Tag name"
+        />
+      </div>
+      <div className="field">
+        <span className="field-label">Icon</span>
+        <IconButton value={t.icon} onChange={(icon) => updateTag(t.id, { icon })} />
+      </div>
+      <div className="field">
+        <span className="field-label">Color</span>
+        <ColorPicker value={t.color} onChange={(color) => updateTag(t.id, { color })} />
+      </div>
+      <div className="field">
+        <span className="field-label">Used by</span>
+        <span className="muted">
+          {uses} item{uses === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="row wrap">
+        <button className="btn btn-sm" aria-label="Duplicate tag" onClick={() => onSelect(duplicateTag(t.id) ?? undefined)}>
+          <CopyPlus size={13} /> Duplicate
+        </button>
+        <button className="btn btn-sm" onClick={() => void platform().writeClipboard(t.id).then(() => toast("Tag ID copied"))}>
+          <Hash size={13} /> Copy ID
+        </button>
+        <button
+          className="btn btn-sm btn-danger"
+          aria-label="Delete tag"
+          onClick={() =>
+            confirmAction({
+              title: `Delete tag “${t.name}”?`,
+              message: `This tag will be removed from ${uses} item${uses === 1 ? "" : "s"} and from formatting rules that reference it.`,
+              confirmLabel: "Delete",
+              danger: true,
+              onConfirm: () => {
+                deleteTag(t.id);
+                onSelect(undefined);
+              },
+            })
+          }
+        >
+          <Trash2 size={13} /> Delete
         </button>
       </div>
     </div>
