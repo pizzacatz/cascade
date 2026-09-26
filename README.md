@@ -45,7 +45,9 @@ no cloud, no telemetry, and makes no network requests of its own.
 - **Recurrence** — daily / weekly / monthly rules (incl. "2nd Tuesday", "last day")
   that copy template contents onto a day when it is prepared.
 - **Stack** — a one-task-at-a-time focus session with no timer, a duration, an end time,
-  or Pomodoro, plus a compact always-on-top runner window.
+  or Pomodoro, plus a compact always-on-top runner window. Optional **remote control**:
+  scan a QR code to tick tasks off from a phone on the same network (off by default; a
+  new secret link each time, and only the current Stack is shared).
 - **Printing** — system print, or task tickets on thermal/receipt printers: raw ESC/POS or
   StarPRNT over CUPS, image tickets via `lp`, Bluetooth LE printers, and MQTT print servers.
 - **Undo everything** — every gesture is one undo step (`Ctrl+Z` / `Ctrl+Y`).
@@ -116,7 +118,13 @@ Then:
 npm ci
 npm run tauri dev      # run the desktop app with hot reload
 npm run tauri build    # produce .deb / .rpm / AppImage in src-tauri/target/release/bundle/
+npm run build:appimage # just the AppImage (and delete its 250 MB staging folder)
+npm run build:cli      # bundle cascade-cli into dist-cli/cascade-cli.mjs
 ```
+
+The release binary (`src-tauri/target/release/cascade`, ~8 MB) also runs on its own on a
+machine that has WebKitGTK 4.1 installed, and starts faster than the AppImage, which
+carries its own copy of WebKitGTK and GTK.
 
 `npm run dev` runs the UI alone in a browser (documents are kept in `localStorage`), which
 is handy for UI work. Printing to receipt printers and file dialogs need the desktop app.
@@ -261,20 +269,25 @@ its code.
 
 Cascade reads and writes only the files you open, its settings, and its backups. It never
 contacts a server. The only network traffic it can produce is what *you* configure: sending
-print jobs to an MQTT broker, or to a network printer through CUPS.
+print jobs to an MQTT broker, or to a network printer through CUPS. Stack remote control,
+when you turn it on, serves the current Stack (never the document) on your local network
+behind a random token, and stops when the Stack ends.
 
 ## Architecture
 
 ```
 src/model/     pure TypeScript: types, .col codec, ordering keys, tree index,
-               progression, conditional formatting, recurrence, outline (clipboard) format
-src/state/     zustand store with immer-patch undo; operations (items, config, navigation),
-               shortcut table, file lifecycle and autosave, CLI handling, Stack
+               progression, conditional formatting, recurrence, outline (clipboard) format,
+               folder date rules (schedule.ts), iCalendar export
+src/state/     zustand store with immer-patch undo (folder date rules run inside each
+               transaction); operations (items, config, navigation, scheduling), shortcut
+               table, file lifecycle, autosave and backups, CLI handling, Stack
 src/print/     ticket building, canvas rasterisation, ESC/POS encoding, print dispatch, UI
 src/ui/        React components (columns, calendar, overlays, palette, settings)
 src/platform/  Tauri plugins in the desktop app, localStorage fallback in a browser
+src/headless/  cascade-cli and the MCP server (reuse the store headlessly)
 src-tauri/     Rust backend: CLI reply protocol, single instance, CUPS (lp), Bluetooth LE
-               (btleplug/BlueZ), MQTT (rumqttc), packaging
+               (btleplug/BlueZ), MQTT (rumqttc), Stack remote-control server, packaging
 ```
 
 Run the tests with `npm test` (TypeScript) and `cargo test` in `src-tauri/` (Rust).
