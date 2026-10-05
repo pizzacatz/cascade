@@ -87,6 +87,20 @@ pub fn run() {
         }));
     }
 
+    let context = tauri::generate_context!();
+    let portable_data = portable::app_data_dir(&context.config().identifier);
+
+    // Logs default to the OS log dir, which only follows the portable folder
+    // on Linux; elsewhere write them into it directly.
+    let mut log_plugin = tauri_plugin_log::Builder::new().level(log::LevelFilter::Info);
+    if let Some(dir) = &portable_data {
+        use tauri_plugin_log::{Target, TargetKind};
+        log_plugin = log_plugin.clear_targets().targets([
+            Target::new(TargetKind::Stdout),
+            Target::new(TargetKind::Folder { path: dir.join("logs"), file_name: None }),
+        ]);
+    }
+
     builder
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_fs::init())
@@ -95,11 +109,29 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .level(log::LevelFilter::Info)
-                .build(),
-        )
+        .plugin(log_plugin.build())
+        .setup(move |app| {
+            // The main window is created here rather than from the config
+            // (`create: false`) so its webview data can follow portable mode.
+            let config = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|w| w.label == "main")
+                .cloned()
+                .ok_or("no main window in tauri.conf.json")?;
+            let mut window = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?;
+            if let Some(dir) = &portable_data {
+                window = window.data_directory(dir.join("webview"));
+                // Backups are read and written through the fs plugin, whose
+                // scope only covers the usual per-user folders.
+                use tauri_plugin_fs::FsExt;
+                app.fs_scope().allow_directory(dir, true)?;
+            }
+            window.build()?;
+            Ok(())
+        })
         .manage(AppState::new(startup_payload, startup_endpoint))
         .manage(bluetooth::BluetoothState::default())
         .manage(remote::RemoteState::default())
@@ -126,6 +158,6 @@ pub fn run() {
             remote::remote_stack_stop,
             remote::remote_stack_update,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running Cascade");
 }

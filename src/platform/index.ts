@@ -18,6 +18,7 @@ export interface PortableStatus {
   dataDir: string | null;
   root: string | null;
   canEnable: boolean;
+  appDataDir: string | null;
 }
 
 /** One automatic backup of a document; `id` is its file name. */
@@ -95,16 +96,23 @@ async function tauriPlatform(): Promise<Platform> {
   const { listen } = await import("@tauri-apps/api/event");
   const pathApi = await import("@tauri-apps/api/path");
 
+  // In portable mode the store and backups live in the portable folder. Linux
+  // gets there through the XDG redirection; other systems need the path.
+  const portable = await invoke<PortableStatus>("portable_status").catch(() => null);
+  const portableData = portable?.appDataDir ?? null;
+
   const stores = new Map<string, Awaited<ReturnType<typeof storeMod.load>>>();
   const getStore = async (name: string) => {
     let s = stores.get(name);
     if (!s) {
-      s = await storeMod.load(name, { autoSave: false, defaults: {} });
+      const path = portableData ? await pathApi.join(portableData, name) : name;
+      s = await storeMod.load(path, { autoSave: false, defaults: {} });
       stores.set(name, s);
     }
     return s;
   };
-  const backupRoot = async () => pathApi.join(await pathApi.appLocalDataDir(), "document-backups");
+  const backupRoot = async () =>
+    pathApi.join(portableData ?? (await pathApi.appLocalDataDir()), "document-backups");
 
   return {
     kind: "tauri",

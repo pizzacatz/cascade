@@ -549,11 +549,15 @@ mod tests {
         assert_eq!(normalize_path_impl("./sub/../doc.col", Some(&cwd)), canon);
         let url = url::Url::from_file_path(&file).unwrap().to_string();
         assert_eq!(normalize_path_impl(&url, None), canon);
-        assert_eq!(normalize_path_impl("/no/such/./x/../y.col", None), "/no/such/y.col");
-        assert_eq!(
-            normalize_path_impl("missing.col", Some("/base/dir")),
-            "/base/dir/missing.col"
-        );
+        // Unix absolute paths are drive-relative on Windows.
+        #[cfg(unix)]
+        {
+            assert_eq!(normalize_path_impl("/no/such/./x/../y.col", None), "/no/such/y.col");
+            assert_eq!(
+                normalize_path_impl("missing.col", Some("/base/dir")),
+                "/base/dir/missing.col"
+            );
+        }
     }
 
     #[test]

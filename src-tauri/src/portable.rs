@@ -12,7 +12,8 @@ use tauri::{AppHandle, Manager};
 pub const DATA_DIR_NAME: &str = "cascade-data";
 
 /// Webview/cache folders that are not worth copying when switching to portable.
-const SKIP_ON_COPY: &[&str] = &["CacheStorage", "WebKitCache", "storage", "mediakeys", "hsts-storage.sqlite", "logs"];
+const SKIP_ON_COPY: &[&str] =
+    &["CacheStorage", "WebKitCache", "storage", "mediakeys", "hsts-storage.sqlite", "logs", "EBWebView"];
 
 /// The folder that contains the app: the AppImage's folder when running from
 /// an AppImage (not its temporary mount point), otherwise the executable's.
@@ -31,6 +32,17 @@ pub fn portable_dir() -> Option<PathBuf> {
     }
     let dir = app_location_dir()?.join(DATA_DIR_NAME);
     dir.is_dir().then_some(dir)
+}
+
+/// The app's own data folder inside the portable folder, for platforms that
+/// ignore the XDG redirection (Windows, macOS): the store, backups, logs and
+/// webview are pointed here explicitly. `None` on Linux, where `init()`
+/// already lands Tauri's app data dir at the same place.
+pub fn app_data_dir(identifier: &str) -> Option<PathBuf> {
+    if cfg!(target_os = "linux") {
+        return None;
+    }
+    Some(portable_dir()?.join("data").join(identifier))
 }
 
 /// Redirect the XDG base directories into the portable folder. Must run before
@@ -62,6 +74,9 @@ pub struct PortableStatus {
     pub root: Option<String>,
     /// Portable mode can be switched on (the app's folder is writable).
     pub can_enable: bool,
+    /// The app's data folder inside `data_dir` (when enabled), for the store
+    /// and backups on platforms that ignore the XDG redirection.
+    pub app_data_dir: Option<String>,
 }
 
 fn is_writable(dir: &Path) -> bool {
@@ -72,7 +87,7 @@ fn is_writable(dir: &Path) -> bool {
 }
 
 #[tauri::command]
-pub fn portable_status() -> PortableStatus {
+pub fn portable_status(app: AppHandle) -> PortableStatus {
     let enabled_dir = portable_dir();
     let root = app_location_dir();
     PortableStatus {
@@ -80,6 +95,7 @@ pub fn portable_status() -> PortableStatus {
         data_dir: enabled_dir.map(|p| p.to_string_lossy().into_owned()),
         can_enable: root.as_deref().is_some_and(is_writable),
         root: root.map(|p| p.to_string_lossy().into_owned()),
+        app_data_dir: app_data_dir(&app.config().identifier).map(|p| p.to_string_lossy().into_owned()),
     }
 }
 
@@ -113,8 +129,11 @@ pub fn enable_portable_mode(app: AppHandle) -> Result<String, String> {
     std::fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
     let id = app.config().identifier.clone();
     let paths = app.path();
+    // On Windows backups sit in the local (not roaming) data dir; on Linux the
+    // two are the same folder and the second copy skips existing files.
     let copies = [
         (paths.app_data_dir(), dir.join("data").join(&id)),
+        (paths.app_local_data_dir(), dir.join("data").join(&id)),
         (paths.app_config_dir(), dir.join("config").join(&id)),
     ];
     for (src, dest) in copies {
