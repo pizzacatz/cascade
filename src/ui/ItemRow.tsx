@@ -160,6 +160,9 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
   const dayTo = spanTo && spanTo !== spanFrom ? spanTo : null;
   const dayLabel = (d: string) => relativeDayLabel(d, today()) ?? formatShortDay(d);
   const progress = stats?.progression ?? -1;
+  const dateFinished = isContainerType(item.type)
+    ? !!stats && stats.totalTaskCount > 0 && stats.incompleteTaskCount === 0
+    : item.finished;
 
   return (
     <div
@@ -210,7 +213,7 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
       <div className="item-meta">
         {day && (
           <button
-            className={`date-chip ${(dayTo ?? day) < today() && !item.finished ? "is-overdue" : ""}`}
+            className={`date-chip ${(dayTo ?? day) < today() && !dateFinished ? "is-overdue" : ""}`}
             title={dayTo ? "Dates inside this folder — open in calendar" : "Open in calendar"}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
