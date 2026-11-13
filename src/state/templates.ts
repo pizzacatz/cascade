@@ -2,7 +2,7 @@
 
 import type { Color, Doc, FormatRule, ItemType, RecurrenceRule, Space, Tag } from "../model/types";
 import { ROOT_SPACE_ID, TRASH_SPACE_ID } from "../model/types";
-import { emptyDoc, finishedTasksRule, makeItem, newId } from "../model/defaults";
+import { canceledTasksRule, emptyDoc, finishedTasksRule, makeItem, newId } from "../model/defaults";
 import { keysBetween } from "../model/order";
 import { todayKey } from "../model/dates";
 
@@ -145,6 +145,7 @@ export const DOC_TEMPLATES: DocTemplate[] = [
         ["focus", "Focus", "purple", "bullseye"],
       ]);
       doc.config.conditionalFormatting = rules([
+        { ...canceledTasksRule() },
         { ...finishedTasksRule() },
         overdueRule(),
         tagRule("Waiting", "waiting", { italic: true, textColor: "orange" }),
@@ -203,6 +204,7 @@ export const DOC_TEMPLATES: DocTemplate[] = [
         ["delegated", "Delegated", "yellow", "user"],
       ]);
       doc.config.conditionalFormatting = rules([
+        { ...canceledTasksRule() },
         { ...finishedTasksRule() },
         overdueRule(),
         tagRule("Urgent", "urgent", { bold: true, textColor: "red" }),

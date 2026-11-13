@@ -29,6 +29,7 @@ import {
   indentSelection,
   moveSelection,
   toggleFinished,
+  toggleCanceled,
   unindentSelection,
 } from "./items";
 import { copyWithToast, cutSelection, paste } from "./clipboard";
@@ -82,6 +83,7 @@ export const BINDINGS: Binding[] = [
   // Editing
   { id: "edit", keys: "enter|f2", contexts: SEL, description: "Edit the selected item", category: "editing", help: true, run: withSingleEditable((id) => enterEdit(id, "end")) },
   { id: "toggle-finished", keys: "space", contexts: SEL, description: "Toggle finished", category: "status", help: true, run: () => toggleFinished() },
+  { id: "toggle-canceled", keys: "shift+space", contexts: SEL, description: "Toggle canceled", category: "status", help: true, run: () => toggleCanceled() },
   { id: "delete", keys: "delete|backspace", contexts: SEL, description: "Move to Trash (delete permanently inside Trash)", category: "editing", help: true, run: deleteSelection },
   { id: "duplicate", keys: "ctrl+d", contexts: SEL, description: "Duplicate", category: "editing", help: true, run: duplicateSelection },
   // Creation

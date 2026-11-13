@@ -26,6 +26,7 @@ import {
   scheduleItems as scheduleOp,
   setColor,
   setFinished as setFinishedOp,
+  setCanceled as setCanceledOp,
   setIcon,
 } from "../state/items";
 import { createSpace, createTag, prepareDay as prepareDayOp, type PrepareResult } from "../state/config";
@@ -121,6 +122,7 @@ export interface ItemInfo {
   type: ItemType;
   text: string;
   finished?: boolean;
+  canceled?: boolean;
   date?: string;
   color?: Color;
   icon?: string;
@@ -147,6 +149,7 @@ export function describe(it: Item, depth = 0): ItemInfo {
     space: spaceOf(x, it.id),
   };
   if (it.type === "task") info.finished = it.finished;
+  if (it.canceled) info.canceled = true;
   if (it.scheduleDate) info.date = it.scheduleDate;
   if (it.color !== "default") info.color = it.color;
   if (it.icon && isContainerType(it.type)) info.icon = it.icon;
@@ -373,6 +376,14 @@ export function setFinished(refs: string[], finished: boolean): ItemInfo[] {
   const notTasks = items.filter((i) => i.type !== "task");
   if (notTasks.length) throw new CascadeError(`Only tasks can be finished: ${notTasks.map((i) => i.text || i.id).join(", ")}`);
   setFinishedOp(items.map((i) => i.id), finished);
+  return items.map((i) => describe(get().doc!.items[i.id]));
+}
+
+export function setCanceled(refs: string[], canceled: boolean): ItemInfo[] {
+  const items = refs.map(resolveItem);
+  const notTasks = items.filter((i) => i.type !== "task");
+  if (notTasks.length) throw new CascadeError(`Only tasks can be canceled: ${notTasks.map((i) => i.text || i.id).join(", ")}`);
+  setCanceledOp(items.map((i) => i.id), canceled);
   return items.map((i) => describe(get().doc!.items[i.id]));
 }
 

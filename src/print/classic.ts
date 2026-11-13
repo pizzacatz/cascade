@@ -4,6 +4,7 @@
 import "./print.css";
 import type { Ticket, TicketBlock } from "./tickets";
 import { defaultClassicConfig, type ClassicConfig } from "./settings";
+import { splitEditNote } from "../model/editNote";
 
 const ROOT_ID = "print-root";
 
@@ -23,7 +24,17 @@ function renderBlock(b: TicketBlock): HTMLElement {
   const row = el("div", `pr-block pr-${b.kind}${b.finished ? " pr-finished" : ""}`);
   row.style.paddingLeft = `${b.depth * 14}pt`;
   if (b.kind === "task") row.appendChild(el("span", `pr-box${b.finished ? " pr-checked" : ""}`));
-  row.appendChild(el("span", "pr-text", b.text || (b.kind === "folder" ? "Untitled" : "")));
+  const split = b.finished ? splitEditNote(b.text) : null;
+  if (split) {
+    // "[EDIT]" note: only the part before the marker is struck through.
+    const text = el("span", "pr-text pr-text-split");
+    if (split.before) text.appendChild(el("span", "pr-struck", split.before));
+    text.appendChild(el("span", "pr-edit-mark", "edit"));
+    text.appendChild(document.createTextNode(split.after));
+    row.appendChild(text);
+  } else {
+    row.appendChild(el("span", "pr-text", b.text || (b.kind === "folder" ? "Untitled" : "")));
+  }
   return row;
 }
 

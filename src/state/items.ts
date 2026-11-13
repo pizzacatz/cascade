@@ -80,6 +80,7 @@ function applyType(it: Item, type: ItemType) {
   if (type !== "task") {
     it.finished = false;
     it.finishedAt = null;
+    delete it.canceled;
   }
   if (type === "separator") it.text = "";
   if (!isTaggableType(type)) it.tags = [];
@@ -465,6 +466,43 @@ export function setFinished(ids: string[], finished: boolean): void {
       if (!x || x.type !== "task" || x.finished === finished) continue;
       x.finished = finished;
       x.finishedAt = finished ? at : null;
+      if (!finished) delete x.canceled;
+      touch(x);
+    }
+  });
+}
+
+/** Cancel the tasks (or reopen them when they are all canceled already). */
+export function toggleCanceled(ids = editTargets()): void {
+  const s = get();
+  if (!s.doc) return;
+  const tasks = ids.map((id) => s.doc!.items[id]).filter((x) => x?.type === "task");
+  if (!tasks.length) return;
+  setCanceled(tasks.map((t) => t.id), !tasks.every((t) => t.canceled));
+}
+
+/**
+ * A canceled task is closed without being done: it is also marked finished
+ * (so it is never overdue) but counts toward no progress. Un-canceling
+ * reopens the task.
+ */
+export function setCanceled(ids: string[], canceled: boolean): void {
+  transact(canceled ? "Cancel" : "Reopen", (d) => {
+    const at = nowIso();
+    for (const id of ids) {
+      const x = d.items[id];
+      if (!x || x.type !== "task" || !!x.canceled === canceled) continue;
+      if (canceled) {
+        x.canceled = true;
+        if (!x.finished) {
+          x.finished = true;
+          x.finishedAt = at;
+        }
+      } else {
+        delete x.canceled;
+        x.finished = false;
+        x.finishedAt = null;
+      }
       touch(x);
     }
   });

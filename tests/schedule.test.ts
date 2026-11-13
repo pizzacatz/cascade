@@ -3,7 +3,7 @@ import { emptyDoc, makeItem } from "../src/model/defaults";
 import { buildIndex, itemsOnDay } from "../src/model/tree";
 import { addDays, todayKey } from "../src/model/dates";
 import { get, set, undo, withoutDateCascade } from "../src/state/store";
-import { addItem, descheduleItems, duplicateSelection, moveItemsTo, scheduleItems, moveSelection } from "../src/state/items";
+import { addItem, descheduleItems, duplicateSelection, moveItemsTo, scheduleItems, moveSelection, setCanceled, setFinished } from "../src/state/items";
 import { selectColumnItem, selectCalendarItem } from "../src/state/nav";
 import { overdueItems, rollOverOverdue } from "../src/state/schedule";
 import { dateSpan } from "../src/model/schedule";
@@ -176,5 +176,23 @@ describe("typed dates", () => {
     exitEdit();
     expect(item("X").text).toBe("Call dentist");
     expect(date("X")).toBe("2030-02-02");
+  });
+});
+
+describe("canceling", () => {
+  it("a canceled task is finished, not overdue, and reopening clears both", () => {
+    scheduleItems(["X"], "2020-01-01");
+    expect(overdueItems().map((x) => x.id)).toContain("X");
+    setCanceled(["X"], true);
+    expect(item("X")).toMatchObject({ finished: true, canceled: true });
+    expect(overdueItems().map((x) => x.id)).not.toContain("X");
+    setCanceled(["X"], false);
+    expect(item("X").finished).toBe(false);
+    expect(item("X").canceled).toBeUndefined();
+    setCanceled(["X"], true);
+    setFinished(["X"], false); // unchecking a canceled task reopens it
+    expect(item("X").canceled).toBeUndefined();
+    undo();
+    expect(item("X").canceled).toBe(true);
   });
 });

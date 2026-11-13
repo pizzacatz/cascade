@@ -9,6 +9,7 @@ import { resolveStyle, sortRules, type FormatContext } from "../src/model/format
 import { recurrenceMatches, toRRule } from "../src/model/recurrence";
 import { parseOutline, outlineToText, nodesFromItems } from "../src/model/outline";
 import { emptyDoc, makeItem } from "../src/model/defaults";
+import { splitEditNote } from "../src/model/editNote";
 import type { Doc, FormatRule, Recurrence } from "../src/model/types";
 
 const TODAY = "2026-09-25";
@@ -18,7 +19,8 @@ describe(".col codec", () => {
   it("parses the sample document", () => {
     const { doc, sourceVersion, shouldRewrite, warnings } = parseDocument(sample, TODAY);
     expect(sourceVersion).toBe(4);
-    expect(shouldRewrite).toBe(false);
+    // The sample predates the built-in Overdue / Canceled rules, which are added once.
+    expect(shouldRewrite).toBe(true);
     expect(warnings).toEqual([]);
     expect(Object.keys(doc.items)).toHaveLength(8);
     const done = doc.items["taskrender000000000000001"];
@@ -27,14 +29,23 @@ describe(".col codec", () => {
     expect(done.finishedAt).toBe("2026-09-25T00:00:05.000Z");
     expect(doc.items["folderlinuxport0000000001"].type).toBe("folder");
     expect(doc.config.viewState?.columnsPath).toEqual(["folderlinuxport0000000001"]);
-    expect(doc.config.conditionalFormatting[0].name).toBe("Finished tasks");
+    expect(sortRules(doc.config.conditionalFormatting).map((r) => r.name)).toEqual([
+      "Canceled tasks",
+      "Finished tasks",
+      "Overdue tasks",
+    ]);
   });
 
   it("round-trips the sample byte-for-byte in structure", () => {
-    const { doc } = parseDocument(sample, TODAY);
-    const out = serializeDocument(doc);
-    const a = JSON.parse(sample);
+    // Once the built-in rules have been added, a document round-trips unchanged.
+    const first = parseDocument(sample, TODAY);
+    const migrated = serializeDocument(first.doc);
+    const second = parseDocument(migrated, TODAY);
+    expect(second.shouldRewrite).toBe(false);
+    const out = serializeDocument(second.doc);
+    const a = JSON.parse(migrated);
     const b = JSON.parse(out);
+    delete a.configuration.viewState.calendarCurrentDate;
     // calendarCurrentDate is regenerated on load (it is not meaningful to persist).
     delete b.configuration.viewState.calendarCurrentDate;
     expect(b).toEqual(a);
@@ -302,5 +313,52 @@ describe("outline", () => {
       "Render columns in WebKitGTK",
       "Nested folder",
     ]);
+  });
+});
+
+describe("canceled tasks and built-in rules", () => {
+  it("round-trips canceled and keeps it only on finished tasks", () => {
+    const doc = emptyDoc();
+    doc.items.c = makeItem("task", { id: "c", parentId: "root", position: "a0", text: "c", finished: true, finishedAt: "2026-09-24T00:00:00.000Z", canceled: true });
+    doc.items.d = makeItem("task", { id: "d", parentId: "root", position: "a1", text: "d" });
+    const raw = JSON.parse(serializeDocument(doc));
+    const c = raw.items.find((i: { id: string }) => i.id === "c");
+    expect(c.canceled).toBe(true);
+    expect(c.finished).toBe(true);
+    // A stray canceled flag on an unfinished task is dropped.
+    raw.items.find((i: { id: string }) => i.id === "d").canceled = true;
+    const back = parseDocument(JSON.stringify(raw), TODAY).doc;
+    expect(back.items.c.canceled).toBe(true);
+    expect(back.items.d.canceled).toBeUndefined();
+  });
+
+  it("does not re-add a built-in rule the user deleted", () => {
+    const doc = emptyDoc();
+    doc.config.conditionalFormatting = doc.config.conditionalFormatting.filter((r) => r.name !== "Overdue tasks");
+    const back = parseDocument(serializeDocument(doc), TODAY);
+    expect(back.shouldRewrite).toBe(false);
+    expect(back.doc.config.conditionalFormatting.map((r) => r.name)).not.toContain("Overdue tasks");
+  });
+
+  it("styles canceled red + struck, overdue red, and leaves canceled out of progress", () => {
+    const doc = emptyDoc();
+    doc.items.F = makeItem("folder", { id: "F", parentId: "root", position: "a0", text: "F" });
+    doc.items.done = makeItem("task", { id: "done", parentId: "F", position: "a0", finished: true });
+    doc.items.cxl = makeItem("task", { id: "cxl", parentId: "F", position: "a1", finished: true, canceled: true });
+    doc.items.late = makeItem("task", { id: "late", parentId: "root", position: "a1", scheduleDate: "2026-09-20", schedulePosition: "a0" });
+    const ix = buildIndex(doc);
+    const stats = computeStats(ix, "by_task_count", TODAY);
+    const ctx: FormatContext = { ix, stats, today: TODAY, weekStartsOn: "monday", tagIds: new Set() };
+    const rules = sortRules(doc.config.conditionalFormatting);
+    expect(resolveStyle(rules, doc.items.cxl, ctx)).toMatchObject({ strikethrough: true, textColor: "red" });
+    expect(resolveStyle(rules, doc.items.done, ctx)).toMatchObject({ strikethrough: true, textColor: "gray" });
+    expect(resolveStyle(rules, doc.items.late, ctx)).toMatchObject({ strikethrough: false, textColor: "red" });
+    expect(stats.get("F")).toMatchObject({ totalTaskCount: 1, completedTaskCount: 1, progression: 1 });
+  });
+
+  it("splits [EDIT] notes", () => {
+    expect(splitEditNote("Call Bob [EDIT] emailed instead")).toEqual({ before: "Call Bob", after: "emailed instead" });
+    expect(splitEditNote("x [edit]y")).toEqual({ before: "x", after: "y" });
+    expect(splitEditNote("no marker")).toBeNull();
   });
 });

@@ -12,6 +12,7 @@ import {
   Keyboard,
   Info,
   CheckSquare,
+  XSquare,
   Copy,
   Scissors,
   ClipboardPaste,
@@ -36,6 +37,7 @@ import {
   Settings2,
   History,
   CalendarArrowDown,
+  ArrowRightToLine,
 } from "lucide-react";
 import { COLORS, ITEM_TYPES, TRASH_SPACE_ID, childPolicy, isContainerType, isTaggableType, type Color, type ItemType } from "../../model/types";
 import { childrenOf, descendants, isUserSpace } from "../../model/tree";
@@ -54,6 +56,7 @@ import {
   setColor,
   sortColumn,
   toggleFinished,
+  toggleCanceled,
   toggleTag,
   trashFinished,
   moveSelection,
@@ -75,6 +78,7 @@ import {
   updateSpace,
 } from "../../state/config";
 import { keyLabel } from "../../state/shortcuts";
+import { rollOverDay, unfinishedOnDay } from "../../state/schedule";
 import { Menu, type MenuEntry } from "./Menu";
 import { Icon } from "../icons";
 import { TypeIcon } from "../TypeIcon";
@@ -259,6 +263,7 @@ function itemEntries(itemId: string, view: "columns" | "calendar"): MenuEntry[] 
     { label: "Move", icon: <FolderInput size={14} />, onHover: highlight("move", ids), submenu: moveEntries() },
     { separator: true },
     { label: "Toggle Finished", icon: <CheckSquare size={14} />, hint: keyLabel("toggle-finished"), disabled: it.type !== "task", run: () => toggleFinished(ids) },
+    { label: it.canceled ? "Reopen Canceled" : "Cancel Task", icon: <XSquare size={14} />, hint: keyLabel("toggle-canceled"), disabled: it.type !== "task", run: () => toggleCanceled(ids) },
     { label: "Schedule…", icon: <CalendarPlus size={14} />, hint: keyLabel("schedule"), run: () => openCommand("schedule") },
     { label: "Move to…", icon: <FolderInput size={14} />, hint: keyLabel("move-to"), onHover: highlight("move", ids), run: () => openCommand("move") },
     ...(anyContainer ? [{ label: "Insert Template…", icon: <BookmarkCheck size={14} />, run: () => openOverlay({ kind: "template", target: { parentId: itemId } }) }] : []),
@@ -332,6 +337,9 @@ function surfaceEntries(t: Extract<ContextTarget, { type: "surface" }>): MenuEnt
       ? [
           { separator: true },
           { label: "Prepare recurring tasks", icon: <CalendarCheck size={14} />, disabled: !future || prepared, run: () => "date" in scope && openOverlay({ kind: "prepare", date: scope.date }) },
+          ...(!future && unfinishedOnDay(scope.date) > 0
+            ? [{ label: "Move unfinished to today", icon: <ArrowRightToLine size={14} />, run: () => "date" in scope && rollOverDay(scope.date) }]
+            : []),
           ...(prepared ? [{ label: "Allow preparing again", icon: <CalendarX size={14} />, run: () => "date" in scope && unprepareDay(scope.date) }] : []),
         ]
       : []),

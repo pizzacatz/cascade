@@ -108,7 +108,7 @@ function line(i: ItemInfo): string {
   let mark: string;
   switch (i.type) {
     case "task":
-      mark = i.finished ? "[x]" : "[ ]";
+      mark = i.canceled ? "[-]" : i.finished ? "[x]" : "[ ]";
       break;
     case "folder":
       mark = "▸";

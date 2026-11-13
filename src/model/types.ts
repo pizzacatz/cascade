@@ -44,6 +44,8 @@ export interface Item {
   text: string;
   finished: boolean;
   finishedAt: string | null;
+  /** A canceled task is closed without being done. Always also `finished`. */
+  canceled?: boolean;
   color: Color;
   icon: string | null;
   tags: string[];
@@ -126,6 +128,11 @@ export interface FinishedCondition {
   value: boolean;
 }
 
+export interface CanceledCondition {
+  kind: "canceled";
+  value: boolean;
+}
+
 export const NUMBER_FIELDS = [
   "progression",
   "totalTaskCount",
@@ -165,7 +172,8 @@ export type TaskCondition =
   | TextCondition
   | SpaceCondition
   | ScheduleDateCondition
-  | FinishedCondition;
+  | FinishedCondition
+  | CanceledCondition;
 export type FolderCondition = TagCondition | TextCondition | SpaceCondition | NumberCondition;
 export type Condition = TaskCondition | FolderCondition;
 

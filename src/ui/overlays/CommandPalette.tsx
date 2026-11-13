@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Search, ChevronRight, FilePlus, FolderOpen, X as XIcon, Settings, Printer, Layers, HelpCircle, PanelTop, Maximize2,
-  CalendarDays, Columns3, Sun, Moon, Monitor, Trash2, CopyPlus, Copy, Scissors, CheckSquare, Tag, CalendarPlus,
+  CalendarDays, Columns3, Sun, Moon, Monitor, Trash2, CopyPlus, Copy, Scissors, CheckSquare, XSquare, Tag, CalendarPlus,
   FolderInput, FileText, LayoutTemplate, CalendarCheck, Eraser, ListX, Plus, Info, Bug, ArrowUpDown, BookmarkCheck,
   Settings2, CalendarX, Undo2, Redo2, Keyboard, Pencil, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, MousePointer2,
   Shapes, Palette, History, CalendarArrowDown,
@@ -20,7 +20,7 @@ import { indexOf, selectionOf, today } from "../../state/derived";
 import { columnIds, selectColumnItem, selectCalendarItem, switchSpace, calendarDays, focusView, enterEdit, selectAll, selectEdge, setCalendarAnchor } from "../../state/nav";
 import {
   addItem, canChangeType, changeType, deleteSelection, descheduleItems, duplicateSelection, moveSelection, moveSelectionTo,
-  removeEmptyItems, scheduleSelection, setColor, setIcon, sortColumn, toggleFinished, toggleTag, addTag, trashFinished,
+  removeEmptyItems, scheduleSelection, setColor, setIcon, sortColumn, toggleFinished, toggleCanceled, toggleTag, addTag, trashFinished,
   createSibling, emptyTrash,
 } from "../../state/items";
 import { copyWithToast, cutSelection } from "../../state/clipboard";
@@ -107,6 +107,7 @@ function rootRows(s: AppState): Row[] {
         ? [{ id: "add-child", label: "Create Child Item", icon: <Plus size={15} />, hint: keyLabel("create-child"), keywords: "subtask nest folder", run: () => addItem("task", { view: "columns", parentId: single.id }) }]
         : []),
       ...(items.some((x) => x.type === "task") ? [{ id: "toggle-status", label: "Toggle Finished", icon: <CheckSquare size={15} />, hint: keyLabel("toggle-finished"), run: () => toggleFinished(sel) }] : []),
+      ...(items.some((x) => x.type === "task") ? [{ id: "toggle-canceled", label: "Toggle Canceled", icon: <XSquare size={15} />, hint: keyLabel("toggle-canceled"), run: () => toggleCanceled(sel) }] : []),
       { id: "schedule", label: "Schedule…", icon: <CalendarPlus size={15} />, hint: keyLabel("schedule"), page: "schedule", keywords: "date calendar day" },
       { id: "move", label: "Move to…", icon: <FolderInput size={15} />, hint: keyLabel("move-to"), page: "move", keywords: "reparent folder space" },
       ...(items.some((x) => isContainerType(x.type)) ? [{ id: "icon", label: "Change Icon…", icon: <Icon name="folder" size={15} />, page: "icon" as const }] : []),

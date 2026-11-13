@@ -91,6 +91,18 @@
   text-decoration: line-through;
   color: var(--text-muted, #666);
 }
+.pr-finished .pr-text-split {
+  text-decoration: none;
+}
+.pr-struck {
+  text-decoration: line-through;
+}
+.pr-edit-mark {
+  margin: 0 0.35em;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
 
 .pr-heading .pr-text {
   font-size: 1.1em;

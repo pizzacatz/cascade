@@ -27,9 +27,14 @@ no cloud, no telemetry, and makes no network requests of its own.
   it ("Today – Fri").
 - **Type a date** — end an item with `@tomorrow`, `@fri`, `@dec 5`, `@+3d` or
   `@2026-10-01` to schedule it (`@none` removes the date).
-- **Roll over** — "N overdue → Today" in the calendar bar and a "→ Today" button on past
-  days move unfinished work forward (finished tasks stay where they were); optionally
-  automatic on open and at midnight.
+- **Overdue work keeps its date** — it turns red and is gathered at the top of today's
+  column without being moved. An **All / Today / Overdue** switch there shows both, only
+  today's items, or only the backlog; "N overdue" in the calendar bar jumps to it. To move
+  a past day's unfinished work forward on purpose, use "Move unfinished to today" in that
+  day's menu, or drag an overdue item onto a day.
+- **Canceled tasks** — Shift+Space (or "Cancel Task") closes a task without doing it: a red
+  ✕, red and struck through, never overdue, left out of progress and the .ics export.
+  In any struck-through item, text after `[EDIT]` is not struck, for a note on what changed.
 - **Six item types** — task, text note, heading, separator, folder, and template.
 - **Type to structure** — `# ` makes a heading, `---` a separator, `::` opens an inline
   command menu (all three triggers are configurable).
@@ -219,7 +224,7 @@ Exit codes: `0` ok, `1` error, `2` bad usage. Run `cascade-cli --help` for every
 `cascade-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on
 stdio, giving agents typed tools: `list_items`, `get_item`, `search_items`,
 `get_agenda` (a date range, default the next 7 days), `get_overdue`, `roll_over`,
-`list_spaces_and_tags`, `add_item`, `add_items`, `update_item`, `set_finished`,
+`list_spaces_and_tags`, `add_item`, `add_items`, `update_item`, `set_finished`, `set_canceled`,
 `move_items`, `schedule_items`, `delete_items`, `add_space`, `prepare_day`,
 `list_backups`, `restore_backup`, `export_ics`, `create_document`. With `--file`, tools
 default to that document.

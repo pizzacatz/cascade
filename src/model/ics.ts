@@ -54,7 +54,8 @@ function stamp(d: Date): string {
 export function exportableItems(doc: Doc): Item[] {
   const ix = buildIndex(doc);
   return Object.values(doc.items)
-    .filter((it) => it.scheduleDate && (it.type === "task" || it.type === "folder") && !isInTrash(ix, it.id))
+    // Canceled tasks are not happening, so they are left out of the calendar.
+    .filter((it) => it.scheduleDate && (it.type === "task" || it.type === "folder") && !it.canceled && !isInTrash(ix, it.id))
     .sort(
       (a, b) =>
         a.scheduleDate!.localeCompare(b.scheduleDate!) || (a.schedulePosition ?? "").localeCompare(b.schedulePosition ?? "") || a.id.localeCompare(b.id),

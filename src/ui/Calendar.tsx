@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, ChevronDown, MoreHorizontal, CalendarCheck, AlertTriangle, Repeat, Pin, PinOff, ArrowRightToLine } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, MoreHorizontal, CalendarCheck, AlertTriangle, Repeat, Pin, PinOff, Check, CalendarDays } from "lucide-react";
 import type { Item } from "../model/types";
+import { isContainerType } from "../model/types";
 import { childrenOf, itemsOnDay } from "../model/tree";
 import {
   addDays,
@@ -11,17 +12,20 @@ import {
   startOfMonth,
 } from "../model/dates";
 import { rulesForDay } from "../model/recurrence";
-import { get, useApp } from "../state/store";
-import { indexOf, today } from "../state/derived";
-import { calendarDays, setCalendarAnchor, setVisibleDayCount, shiftCalendar, toggleDayPicker } from "../state/nav";
-import { exitEdit } from "../state/items";
+import { get, set, useApp, type OverdueFilter } from "../state/store";
+import { indexOf, styleFor, today } from "../state/derived";
+import { calendarDays, selectCalendarItem, setCalendarAnchor, setVisibleDayCount, shiftCalendar, toggleDayPicker } from "../state/nav";
+import { exitEdit, toggleFinished } from "../state/items";
 import { prepareDayWithToast } from "../state/config";
-import { overdueItems, rollOverDay, rollOverOverdue, unfinishedOnDay } from "../state/schedule";
+import { overdueItems } from "../state/schedule";
+import { splitEditNote } from "../model/editNote";
+import { startItemDrag } from "./dnd";
+import { Icon } from "./icons";
 import { ProgressRing } from "./ProgressRing";
 import { MonthGrid, dayStatus } from "./MonthGrid";
 import { CreateRow, EditFooter } from "./CreateRow";
 import { openOverlay } from "../state/overlays";
-import { ItemRow } from "./ItemRow";
+import { EditNoteText, ItemRow } from "./ItemRow";
 
 export function CalendarView() {
   const ref = useRef<HTMLDivElement>(null);
@@ -101,9 +105,14 @@ function DayColumn({ date, width }: { date: string; width: number }) {
             }),
         )
       : [];
-  const tasks = items.filter((i) => i.type === "task");
+  const tasks = items.filter((i) => i.type === "task" && !i.canceled);
   const progress = tasks.length ? tasks.filter((i) => i.finished).length / tasks.length : -1;
-  const pending = past && doc ? unfinishedOnDay(date) : 0;
+  // Today's column also gathers overdue work from past days (shown, not moved).
+  const isToday = date === t;
+  const filter = useApp((s) => s.overdueFilter);
+  const overdue = isToday && doc ? overdueOf(doc.items, t) : [];
+  const showOverdue = isToday && filter !== "hide" && overdue.length > 0;
+  const showOwn = !isToday || filter !== "only";
 
   const openMenu = (x: number, y: number) =>
     openOverlay({ kind: "context", x, y, target: { type: "surface", view: "calendar", date } });
@@ -130,15 +139,6 @@ function DayColumn({ date, width }: { date: string; width: number }) {
             <AlertTriangle size={14} />
           </button>
         )}
-        {past && pending > 0 && (
-          <button
-            className="btn btn-ghost btn-sm day-rollover"
-            title={`Move ${pending} unfinished item${pending === 1 ? "" : "s"} to today`}
-            onClick={() => rollOverDay(date)}
-          >
-            <ArrowRightToLine size={13} /> Today
-          </button>
-        )}
         {progress >= 0 && (
           <span className="column-progress" title={`${Math.round(progress * 100)} %`}>
             <ProgressRing value={progress} size={14} />
@@ -155,6 +155,7 @@ function DayColumn({ date, width }: { date: string; width: number }) {
           <MoreHorizontal size={15} />
         </button>
       </header>
+      {isToday && (overdue.length > 0 || filter !== "all") && <OverdueFilterBar filter={filter} count={overdue.length} />}
       <div
         className={`column-body ${dropEnd ? "drop-end" : ""}`}
         data-day={date}
@@ -167,12 +168,22 @@ function DayColumn({ date, width }: { date: string; width: number }) {
           openMenu(e.clientX, e.clientY);
         }}
       >
-        {items.map((it) => (
-          <ItemRow key={it.id} item={it} view="calendar" />
-        ))}
-        {!busy && <CreateRow target={{ view: "calendar", date }} focused={isTarget} hint={null} />}
-        {editingHere && <EditFooter allowChild={false} />}
-        {rules.length > 0 && !past && (
+        {showOverdue && (
+          <div className="overdue-block">
+            {overdue.map((it) => (
+              <OverdueRow key={it.id} item={it} />
+            ))}
+          </div>
+        )}
+        {showOwn && showOverdue && items.length > 0 && <div className="overdue-divider">Today</div>}
+        {showOwn &&
+          items.map((it) => (
+            <ItemRow key={it.id} item={it} view="calendar" />
+          ))}
+        {showOwn && !busy && <CreateRow target={{ view: "calendar", date }} focused={isTarget} hint={null} />}
+        {showOwn && editingHere && <EditFooter allowChild={false} />}
+        {isToday && filter === "only" && overdue.length === 0 && <p className="muted overdue-empty">Nothing overdue.</p>}
+        {showOwn && rules.length > 0 && !past && (
           <div className="recurring-block">
             <div className="recurring-divider">
               <Repeat size={12} />
@@ -355,22 +366,134 @@ function MonthButton({ anchor, dayCount, pinned }: { anchor: string; dayCount: n
   );
 }
 
-/** "N overdue → Today" when unfinished work sits on past days. */
+/**
+ * "N overdue" when unfinished work sits on past days. Overdue work keeps its
+ * date; this jumps to today with only the overdue work shown.
+ */
 function OverdueButton() {
   const count = useApp((s) => (s.doc ? overdueCount(s.doc.items, today()) : 0));
   if (!count) return null;
   return (
-    <button className="btn btn-ghost btn-sm overdue-btn" title="Move unfinished tasks from past days to today" onClick={() => rollOverOverdue()}>
-      <ArrowRightToLine size={13} /> {count} overdue → Today
+    <button
+      className="btn btn-ghost btn-sm overdue-btn"
+      title="Show overdue work in today's column"
+      onClick={() => {
+        setCalendarAnchor(today());
+        set({ overdueFilter: "only" });
+      }}
+    >
+      {count} overdue
     </button>
   );
+}
+
+const FILTERS: [OverdueFilter, string, string][] = [
+  ["all", "All", "Today's items and overdue work"],
+  ["hide", "Today", "Only items dated today"],
+  ["only", "Overdue", "Only overdue work from past days"],
+];
+
+/** All / Today / Overdue switch at the top of today's column. */
+function OverdueFilterBar({ filter, count }: { filter: OverdueFilter; count: number }) {
+  return (
+    <div className="overdue-filter" role="radiogroup" aria-label="Overdue work in today's column">
+      {FILTERS.map(([k, label, title]) => (
+        <button
+          key={k}
+          role="radio"
+          aria-checked={filter === k}
+          className={`overdue-filter-btn ${filter === k ? "is-active" : ""}`}
+          title={title}
+          onClick={() => set({ overdueFilter: k })}
+        >
+          {label}
+          {k === "only" && count > 0 && <span className="overdue-filter-count">{count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * An overdue item shown in today's column. It stays on its own day: the date
+ * chip (or a double-click) goes there; dragging it onto a day reschedules it.
+ */
+function OverdueRow({ item }: { item: Item }) {
+  const style = useApp((s) => styleFor(s, item));
+  const editSplit = style.strikethrough ? splitEditNote(item.text) : null;
+  const cls = [
+    "item-text",
+    style.bold && "is-bold",
+    style.italic && "is-italic",
+    style.strikethrough && !editSplit && "is-strike",
+    style.textColor && `has-color c-${style.textColor}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const goTo = () => selectCalendarItem(item.id);
+  return (
+    <div
+      className={`item-row overdue-row type-${item.type} ${style.accentColor ? `c-${style.accentColor}` : ""}`}
+      onMouseDown={(e) => e.button === 0 && startItemDrag(e, item.id, "calendar")}
+      onDoubleClick={goTo}
+      title="Overdue — double-click to go to its day, drag onto a day to reschedule"
+    >
+      {item.type === "task" ? (
+        <button
+          className={`checkbox ${style.accentColor ? "has-color" : ""}`}
+          aria-label="Mark finished"
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleFinished([item.id]);
+          }}
+        >
+          {item.finished && <Check size={12} strokeWidth={3} />}
+        </button>
+      ) : isContainerType(item.type) ? (
+        <span className="item-icon">
+          <Icon name={item.icon} fallback={undefined} size={16} />
+        </span>
+      ) : null}
+      <div className={cls}>{editSplit ? <EditNoteText split={editSplit} /> : item.text || "Untitled"}</div>
+      <div className="item-meta">
+        {item.scheduleDate && (
+          <button
+            className="date-chip is-overdue"
+            title="Go to this day"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              goTo();
+            }}
+          >
+            <CalendarDays size={11} />
+            {relativeDayLabel(item.scheduleDate, today()) ?? formatShortDay(item.scheduleDate)}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const overdueListCache = new WeakMap<object, { day: string; list: Item[] }>();
+/** Overdue items, cached per document revision (the items object) and day. */
+function overdueOf(items: object, day: string): Item[] {
+  const c = overdueListCache.get(items);
+  if (c && c.day === day) return c.list;
+  const list = overdueItems(day);
+  overdueListCache.set(items, { day, list });
+  return list;
 }
 
 const overdueCache = new WeakMap<object, { day: string; n: number }>();
 function overdueCount(items: object, day: string): number {
   const c = overdueCache.get(items);
   if (c && c.day === day) return c.n;
-  const n = overdueItems(day).length;
+  const n = overdueOf(items, day).length;
   overdueCache.set(items, { day, n });
   return n;
 }

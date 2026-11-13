@@ -59,7 +59,8 @@ export function computeStats(ix: DocIndex, mode: ProgressionMode, today: string)
     if (visiting.has(it.id)) return s; // cycle guard
     visiting.add(it.id);
 
-    if (it.type === "task") {
+    // A canceled task is closed but not done: it counts toward nothing.
+    if (it.type === "task" && !it.canceled) {
       s.totalTaskCount = 1;
       s.completedTaskCount = it.finished ? 1 : 0;
       s.incompleteTaskCount = it.finished ? 0 : 1;
@@ -78,7 +79,7 @@ export function computeStats(ix: DocIndex, mode: ProgressionMode, today: string)
       s.overdueTaskCount += cs.overdueTaskCount;
       s.todayTaskCount += cs.todayTaskCount;
       s.futureTaskCount += cs.futureTaskCount;
-      if (c.type === "task") {
+      if (c.type === "task" && !c.canceled) {
         if (isOverdue(c, today)) s.directOverdueTaskCount++;
         if (c.scheduleDate === today) s.directTodayTaskCount++;
         if (c.scheduleDate !== null && c.scheduleDate > today) s.directFutureTaskCount++;
@@ -87,11 +88,11 @@ export function computeStats(ix: DocIndex, mode: ProgressionMode, today: string)
     }
 
     if (it.type === "task" && kids.length === 0) {
-      s.progression = it.finished ? 1 : 0;
+      s.progression = it.canceled ? -1 : it.finished ? 1 : 0;
     } else if (mode === "by_task_count") {
       s.progression = s.totalTaskCount === 0 ? -1 : s.completedTaskCount / s.totalTaskCount;
     } else if (it.type === "task" && levelValues.length === 0) {
-      s.progression = it.finished ? 1 : 0;
+      s.progression = it.canceled ? -1 : it.finished ? 1 : 0;
     } else {
       s.progression = levelValues.length ? levelValues.reduce((a, b) => a + b, 0) / levelValues.length : -1;
     }

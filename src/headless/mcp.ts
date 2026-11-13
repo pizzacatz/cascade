@@ -16,7 +16,8 @@ Parents can be a space name, a folder id or name, or a path. Dates: YYYY-MM-DD, 
 Adding a child under a task turns that task into a folder. Deleting moves items to Trash unless permanent.
 Changes are saved immediately; the Cascade app reloads the file automatically if it is open.
 Before edits the document is backed up (at most every 2 minutes); list_backups / restore_backup undo mistakes.
-Dating a folder also dates its unfinished child tasks and folders that had no date or the folder's old date.`;
+Dating a folder also dates its unfinished child tasks and folders that had no date or the folder's old date.
+Overdue work keeps its date: don't roll it over to today unless the user asks. Canceled tasks are closed without being done.`;
 
 export async function startMcpServer(defaultFile?: string): Promise<void> {
   const server = new McpServer({ name: "cascade", version: "0.1.0" }, { instructions: INSTRUCTIONS });
@@ -130,7 +131,8 @@ export async function startMcpServer(defaultFile?: string): Promise<void> {
     "roll_over",
     {
       title: "Roll over unfinished work",
-      description: "Move all unfinished work scheduled before a day onto that day (default today). Finished tasks stay where they were done.",
+      description:
+        "Move all unfinished work scheduled before a day onto that day (default today). Only use this when the user explicitly asks to move overdue work: overdue items are meant to keep their dates (Cascade shows them in red and gathers them in today's column without moving them). Finished tasks stay where they were done.",
       inputSchema: { file: fileArg, date: z.string().optional().describe("Target day (default today)") },
     },
     ({ file, date }) => write(file, () => core.rollOver(date ?? "today")),
@@ -217,6 +219,17 @@ export async function startMcpServer(defaultFile?: string): Promise<void> {
       inputSchema: { file: fileArg, items: refs, finished: z.boolean().optional().describe("Default true") },
     },
     ({ file, items, finished }) => write(file, () => core.setFinished(items, finished ?? true)),
+  );
+
+  server.registerTool(
+    "set_canceled",
+    {
+      title: "Cancel or reopen tasks",
+      description:
+        "Mark tasks canceled (closed without being done: shown red and struck through, never overdue, left out of progress and the calendar export), or reopen them with canceled=false. Text after \"[EDIT]\" in a task is shown without strikethrough, for a note on why.",
+      inputSchema: { file: fileArg, items: refs, canceled: z.boolean().optional().describe("Default true") },
+    },
+    ({ file, items, canceled }) => write(file, () => core.setCanceled(items, canceled ?? true)),
   );
 
   server.registerTool(

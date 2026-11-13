@@ -188,6 +188,8 @@ export function conditionMatches(c: Condition, item: Item, ctx: FormatContext): 
       return scheduleMatches(c.operator, item, ctx.today, ctx.weekStartsOn);
     case "finished":
       return item.finished === c.value;
+    case "canceled":
+      return !!item.canceled === c.value;
     case "number":
       return numberMatches(c, ctx.stats.get(item.id));
     default:

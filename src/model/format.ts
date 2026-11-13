@@ -32,7 +32,7 @@ import {
   type Tag,
   type ViewState,
 } from "./types";
-import { defaultSpaces, defaultViewState, finishedTasksRule } from "./defaults";
+import { defaultSpaces, defaultViewState, ensureBuiltinRules, finishedTasksRule } from "./defaults";
 import { isDayKey, todayKey } from "./dates";
 import { compareKeys, keyAfter, keyBetween } from "./order";
 
@@ -100,6 +100,7 @@ function readItem(raw: unknown, hasChildren: Set<string>, warnings: string[]): I
     text: type === "separator" ? "" : isStr(raw.text) ? raw.text : "",
     finished,
     finishedAt: finished && isStr(raw.finishedAt) ? raw.finishedAt : null,
+    ...(finished && raw.canceled === true ? { canceled: true } : {}),
     color: colorFromCode(raw.c ?? raw.color),
     icon: icon || (type === "template" ? "folder-bookmark" : null),
     tags: isTaggableType(type) ? tagsRaw.filter(nonEmpty) : [],
@@ -118,6 +119,7 @@ function writeItem(item: Item): Json {
   if (item.type === "task" && item.finished) {
     out.finished = true;
     if (item.finishedAt) out.finishedAt = item.finishedAt;
+    if (item.canceled) out.canceled = true;
   }
   if (item.createdAt) out.createdAt = item.createdAt;
   if (item.updatedAt) out.updatedAt = item.updatedAt;
@@ -498,10 +500,13 @@ export function parseDocument(text: string, today = todayKey()): ParseResult {
     ...(Object.keys(extra).length ? { extra } : {}),
   };
 
+  const gotBuiltins = ensureBuiltinRules(config);
+
   return {
     doc: { items, config },
     sourceVersion,
-    shouldRewrite: sourceVersion !== CURRENT_FILE_VERSION || rec.normalized || prepared.normalized || repaired,
+    shouldRewrite:
+      sourceVersion !== CURRENT_FILE_VERSION || rec.normalized || prepared.normalized || repaired || gotBuiltins,
     warnings,
   };
 }

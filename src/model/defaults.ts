@@ -1,6 +1,7 @@
 import type { Doc, DocConfig, FormatRule, Item, ItemType, Space, ViewState } from "./types";
 import { ROOT_SPACE_ID, TRASH_SPACE_ID } from "./types";
 import { todayKey } from "./dates";
+import { compareKeys, keyBetween } from "./order";
 
 const ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -35,6 +36,66 @@ export function finishedTasksRule(): FormatRule {
   };
 }
 
+export function overdueTasksRule(priority = "a1"): FormatRule {
+  return {
+    id: newId(),
+    name: "Overdue tasks",
+    enabled: true,
+    priority,
+    kind: "taskRule",
+    logic: "all",
+    conditions: [{ kind: "scheduleDate", operator: "is_overdue" }],
+    style: { textColor: "red" },
+  };
+}
+
+/** Sits above "Finished tasks" so its colour wins (canceled tasks are also finished). */
+export function canceledTasksRule(priority = keyBetween(null, "a0")): FormatRule {
+  return {
+    id: newId(),
+    name: "Canceled tasks",
+    enabled: true,
+    priority,
+    kind: "taskRule",
+    logic: "all",
+    conditions: [{ kind: "canceled", value: true }],
+    style: { strikethrough: true, textColor: "red" },
+  };
+}
+
+/** Config key recording which built-in rules a document has already been given. */
+export const BUILTIN_RULES_KEY = "cascadeBuiltinRules";
+const BUILTIN_RULES = ["overdue", "canceled"] as const;
+
+/**
+ * Give a document the built-in "Overdue tasks" and "Canceled tasks" rules once.
+ * A rule the user later deletes is not re-added (the document remembers it was
+ * offered), and a document that already has an equivalent rule is left alone.
+ * Returns true when the config changed.
+ */
+export function ensureBuiltinRules(config: DocConfig): boolean {
+  const extra = config.extra ?? {};
+  const raw = extra[BUILTIN_RULES_KEY];
+  const offered = new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : []);
+  const missing = BUILTIN_RULES.filter((k) => !offered.has(k));
+  if (!missing.length) return false;
+  const rules = config.conditionalFormatting;
+  const has = (pred: (c: { kind: string; operator?: string }) => boolean) =>
+    rules.some((r) => (r.conditions as { kind: string; operator?: string }[]).some(pred));
+  const sorted = rules.map((r) => r.priority).sort(compareKeys);
+  for (const k of missing) {
+    if (k === "overdue" && !has((c) => c.kind === "scheduleDate" && c.operator === "is_overdue")) {
+      rules.push(overdueTasksRule(keyBetween(sorted.at(-1) ?? null, null)));
+    }
+    if (k === "canceled" && !has((c) => c.kind === "canceled")) {
+      rules.push(canceledTasksRule(keyBetween(null, sorted[0] ?? null)));
+    }
+    offered.add(k);
+  }
+  config.extra = { ...extra, [BUILTIN_RULES_KEY]: [...offered].sort() };
+  return true;
+}
+
 export function defaultViewState(): ViewState {
   return {
     focusedView: "columns",
@@ -50,7 +111,7 @@ export function defaultViewState(): ViewState {
 }
 
 export function defaultConfig(): DocConfig {
-  return {
+  const config: DocConfig = {
     recurrenceRules: [],
     preparedDays: [],
     progressionMode: "by_level",
@@ -59,6 +120,8 @@ export function defaultConfig(): DocConfig {
     conditionalFormatting: [finishedTasksRule()],
     viewState: defaultViewState(),
   };
+  ensureBuiltinRules(config);
+  return config;
 }
 
 export function emptyDoc(): Doc {

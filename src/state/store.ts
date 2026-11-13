@@ -168,7 +168,11 @@ export interface AppState {
   highlightPreview: { kind: HighlightKind; ids: string[] } | null;
   /** Patches applied since the last successful save (re-applied if the file changes on disk). */
   unsavedPatches: Patch[];
+  /** Today's calendar column: show overdue work alongside today's, hide it, or show only it. */
+  overdueFilter: OverdueFilter;
 }
+
+export type OverdueFilter = "all" | "hide" | "only";
 
 const HISTORY_LIMIT = 300;
 
@@ -199,6 +203,7 @@ export const useApp = create<AppState>(() => ({
   createPreview: null,
   deletePreview: null,
   highlightPreview: null,
+  overdueFilter: "all",
 }));
 
 export type HighlightKind = "copy" | "cut" | "duplicate" | "move" | "print" | "stack";

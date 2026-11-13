@@ -156,12 +156,6 @@ export function AppSettings({ tab }: { tab: Tab }) {
             </div>
             <Toggle label="Show ISO week numbers in the day picker" checked={p.showWeekNumber} onChange={(v) => updatePrefs({ showWeekNumber: v })} />
             <Toggle
-              label="Move unfinished tasks to today automatically"
-              hint="When a document opens and at midnight, unfinished tasks (and folders with unfinished tasks) on past days move to today. Finished tasks stay where they were."
-              checked={p.rollOverOverdue}
-              onChange={(v) => updatePrefs({ rollOverOverdue: v })}
-            />
-            <Toggle
               label="Keep an .ics calendar copy next to each document"
               hint="Rewritten on every save as “<document>.ics”, so calendar apps can subscribe to the file. Dated tasks and folders become all-day events."
               checked={p.keepIcsCopy}

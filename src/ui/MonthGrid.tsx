@@ -16,7 +16,7 @@ export interface DayStatus {
 }
 
 export function dayStatus(ix: DocIndex, date: string): DayStatus {
-  const tasks = itemsOnDay(ix, date).filter((i) => i.type === "task");
+  const tasks = itemsOnDay(ix, date).filter((i) => i.type === "task" && !i.canceled);
   return { total: tasks.length, done: tasks.filter((t) => t.finished).length };
 }
 

@@ -603,6 +603,8 @@ function newCondition(kind: Condition["kind"], ctx: { firstTag?: string; firstSp
       return { kind: "scheduleDate", operator: "is_overdue" };
     case "finished":
       return { kind: "finished", value: true };
+    case "canceled":
+      return { kind: "canceled", value: true };
     case "number":
       return { kind: "number", field: "totalTaskCount", operator: "greater_than", value: 0 };
   }
@@ -616,6 +618,7 @@ function ConditionsEditor({ rule }: { rule: FormatRule }) {
     rule.kind === "taskRule"
       ? [
           ["finished", "Finished"],
+          ["canceled", "Canceled"],
           ["tag", "Tag"],
           ["text", "Text"],
           ["space", "Space"],
@@ -649,6 +652,12 @@ function ConditionsEditor({ rule }: { rule: FormatRule }) {
             <select className="select" value={String(c.value)} onChange={(e) => setCond(i, { kind: "finished", value: e.target.value === "true" })}>
               <option value="true">is finished</option>
               <option value="false">is not finished</option>
+            </select>
+          )}
+          {c.kind === "canceled" && (
+            <select className="select" value={String(c.value)} onChange={(e) => setCond(i, { kind: "canceled", value: e.target.value === "true" })}>
+              <option value="true">is canceled</option>
+              <option value="false">is not canceled</option>
             </select>
           )}
           {c.kind === "tag" && (

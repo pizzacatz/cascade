@@ -1,8 +1,9 @@
 import { memo } from "react";
-import { Check, ChevronRight, CalendarDays, Columns3, Tags as TagsIcon } from "lucide-react";
+import { Check, X, ChevronRight, CalendarDays, Columns3, Tags as TagsIcon } from "lucide-react";
 import type { Item, ViewName } from "../model/types";
 import { isContainerType } from "../model/types";
 import { formatShortDay, relativeDayLabel } from "../model/dates";
+import { splitEditNote } from "../model/editNote";
 import { useApp, get } from "../state/store";
 import { folderSpan, statsOf, styleFor, today, indexOf } from "../state/derived";
 import {
@@ -109,11 +110,14 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
     openOverlay({ kind: "context", x: e.clientX, y: e.clientY, target: { type: "item", itemId: item.id, view } });
   };
 
+  // Strikethrough can't be undone on a child, so with an [EDIT] note the strike
+  // goes on the part before the marker only.
+  const editSplit = style.strikethrough && !editing ? splitEditNote(item.text) : null;
   const textCls = [
     "item-text",
     style.bold && "is-bold",
     style.italic && "is-italic",
-    style.strikethrough && "is-strike",
+    style.strikethrough && !editSplit && "is-strike",
     style.textColor && "has-color",
     colorClass(style.textColor),
   ]
@@ -180,8 +184,8 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
     >
       {item.type === "task" && (
         <button
-          className={`checkbox ${item.finished ? "is-checked" : ""} ${style.accentColor ? "has-color" : ""}`}
-          aria-label={item.finished ? "Mark unfinished" : "Mark finished"}
+          className={`checkbox ${item.finished ? "is-checked" : ""} ${item.canceled ? "is-canceled" : ""} ${style.accentColor ? "has-color" : ""}`}
+          aria-label={item.canceled ? "Reopen canceled task" : item.finished ? "Mark unfinished" : "Mark finished"}
           onMouseDown={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -191,7 +195,7 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
             toggleFinished([item.id]);
           }}
         >
-          {item.finished && <Check size={12} strokeWidth={3} />}
+          {item.canceled ? <X size={12} strokeWidth={3} /> : item.finished && <Check size={12} strokeWidth={3} />}
         </button>
       )}
       {isContainerType(item.type) && (
@@ -207,7 +211,7 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
         <ItemEditor item={item} view={view} className={textCls} />
       ) : (
         <div className={textCls}>
-          {item.text || (isContainerType(item.type) || item.type === "heading" ? <span className="placeholder">{placeholderFor(item)}</span> : "\u00a0")}
+          {editSplit ? <EditNoteText split={editSplit} /> : item.text || (isContainerType(item.type) || item.type === "heading" ? <span className="placeholder">{placeholderFor(item)}</span> : "\u00a0")}
         </div>
       )}
       <div className="item-meta">
@@ -265,6 +269,17 @@ export const ItemRow = memo(function ItemRow({ item, view, open }: Props) {
     </div>
   );
 });
+
+/** "Done thing [EDIT] what changed": the first part struck, the note not. */
+export function EditNoteText({ split }: { split: { before: string; after: string } }) {
+  return (
+    <>
+      {split.before && <span className="edit-struck">{split.before}</span>}
+      <span className="edit-mark">edit</span>
+      {split.after}
+    </>
+  );
+}
 
 function placeholderFor(item: Item) {
   switch (item.type) {
