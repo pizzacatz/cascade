@@ -48,11 +48,15 @@ export interface Preferences {
   hideCreateItemButton: boolean;
   columnsProgressBar: "hide" | "showToAllColumns";
   compactWindowPosition: { x: number; y: number } | null;
+  /** Share of the views area the calendar takes when both views show. */
+  calendarSplit: number;
   stack: StackConfig;
 }
 
 export const MIN_COLUMN_WIDTH = 225;
 export const MAX_COLUMN_WIDTH = 500;
+export const MIN_CALENDAR_SPLIT = 0.12;
+export const MAX_CALENDAR_SPLIT = 0.88;
 
 export function defaultPreferences(): Preferences {
   return {
@@ -76,6 +80,7 @@ export function defaultPreferences(): Preferences {
     hideCreateItemButton: false,
     columnsProgressBar: "showToAllColumns",
     compactWindowPosition: null,
+    calendarSplit: 0.5,
     stack: {
       timer: { type: "none", durationMinutes: 25, untilTime: "17:00", workMinutes: 25, breakMinutes: 5 },
       recursive: true,
@@ -129,6 +134,7 @@ export function normalizePreferences(raw: unknown): Preferences {
     columnsProgressBar: r.columnsProgressBar === "hide" ? "hide" : "showToAllColumns",
     compactWindowPosition:
       pos && typeof pos.x === "number" && typeof pos.y === "number" ? { x: pos.x, y: pos.y } : null,
+    calendarSplit: clamp(num(r.calendarSplit, d.calendarSplit), MIN_CALENDAR_SPLIT, MAX_CALENDAR_SPLIT),
     stack: {
       timer: {
         type: (["none", "duration", "until", "pomodoro"] as const).includes(timer.type as StackTimer["type"])

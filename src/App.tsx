@@ -11,6 +11,7 @@ import { Toasts } from "./ui/Toasts";
 import { DragGhost } from "./ui/DragGhost";
 import { OverlayHost } from "./ui/overlays/OverlayHost";
 import { StackRunner } from "./ui/StackRunner";
+import { ViewSplitter } from "./ui/ViewSplitter";
 import { installDragListeners } from "./ui/dnd";
 import { revealWindow } from "./platform";
 
@@ -33,6 +34,7 @@ export function App() {
   const hasDoc = useApp((s) => !!s.doc);
   const showColumns = useApp((s) => s.view.showColumnsView);
   const showCalendar = useApp((s) => s.view.showCalendarView);
+  const calendarSplit = useApp((s) => s.prefs.calendarSplit);
   const hideToolbar = useApp((s) => s.prefs.hideFloatingActionMenu);
   const showHelp = useApp((s) => s.prefs.showHelp);
   const stack = useApp((s) => s.localStack);
@@ -70,8 +72,12 @@ export function App() {
           <Sidebar />
           <main className="workspace">
             {stack && <StackRunner />}
-            <div className={`views ${showColumns && showCalendar ? "is-split" : ""}`}>
+            <div
+              className={`views ${showColumns && showCalendar ? "is-split" : ""}`}
+              style={{ "--calendar-split": calendarSplit } as React.CSSProperties}
+            >
               {showColumns && <ColumnsView />}
+              {showColumns && showCalendar && <ViewSplitter />}
               {showCalendar && <CalendarView />}
               {!showColumns && !showCalendar && (
                 <div className="no-view">

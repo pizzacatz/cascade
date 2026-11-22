@@ -110,12 +110,40 @@
   display: flex;
   flex-direction: column;
 }
-.views.is-split > * {
-  flex: 1 1 50%;
+.views.is-split > .columns-view {
+  flex: calc(1 - var(--calendar-split, 0.5)) 1 0;
   min-height: 0;
 }
 .views.is-split > .calendar-view {
-  border-top: 1px solid var(--border);
+  flex: var(--calendar-split, 0.5) 1 0;
+  min-height: 0;
+}
+/* Drag bar between columns and calendar; its 1px line is the old border. */
+.view-splitter {
+  position: relative;
+  flex: 0 0 1px;
+  background: var(--border);
+  cursor: row-resize;
+  z-index: 4;
+}
+.view-splitter::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -4px;
+  bottom: -4px;
+}
+.view-splitter:hover,
+.view-splitter:focus-visible,
+body.is-resizing-views .view-splitter {
+  background: var(--accent);
+  outline: none;
+}
+body.is-resizing-views,
+body.is-resizing-views * {
+  cursor: row-resize !important;
+  user-select: none !important;
 }
 
 .columns-view,
